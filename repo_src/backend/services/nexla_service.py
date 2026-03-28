@@ -195,6 +195,77 @@ async def nexla_update_data_source(
         return {"available": False, "error": f"HTTP {r.status_code}: {r.text[:200]}"}
 
 
+async def nexla_push_records(
+    source_name: str,
+    records: list,
+) -> dict:
+    """
+    Push a list of JSON records into a Nexla data source for ingestion.
+
+    Workflow:
+      1. Create the data source (idempotent by name — Nexla creates a new one if it
+         doesn't exist; the caller can deduplicate by checking the returned id).
+      2. Generate an API key for push ingest on that source.
+      3. POST the records to the Nexla ingest endpoint.
+
+    Returns a summary dict with available, source_id, records_pushed, and any error.
+    """
+    if not NEXLA_TOKEN:
+        return {"available": False, "error": "NEXLA_TOKEN not set"}
+
+    # Step 1: Create (or re-create) the data source
+    create_result = await nexla_create_data_source(
+        name=source_name,
+        description=f"WTF live data push — {source_name}",
+        ingest_method="API",
+        source_format="JSON",
+    )
+    if not create_result.get("available"):
+        return {"available": False, "error": f"create_data_source failed: {create_result.get('error')}"}
+
+    ds = create_result.get("data_source", {})
+    source_id = ds.get("id") if isinstance(ds, dict) else None
+    if not source_id:
+        return {"available": False, "error": f"No id in data_source response: {ds}"}
+
+    # Step 2: Generate API key for push ingest
+    key_result = await nexla_generate_api_key(source_id)
+    if not key_result.get("available"):
+        return {"available": False, "error": f"generate_api_key failed: {key_result.get('error')}"}
+
+    api_key_info = key_result.get("api_key_info", {})
+    api_key = api_key_info.get("api_key") or api_key_info.get("key") or api_key_info.get("token")
+    if not api_key:
+        return {"available": False, "error": f"No api_key in response: {api_key_info}"}
+
+    # Step 3: Push records to ingest endpoint
+    ingest_url = f"https://ingest.nexla.io/ingest/{source_id}"
+    async with httpx.AsyncClient(timeout=15) as client:
+        try:
+            r = await client.post(
+                ingest_url,
+                headers={
+                    "X-API-Key": api_key,
+                    "Content-Type": "application/json",
+                },
+                json=records if isinstance(records, list) else [records],
+            )
+            if r.status_code in (200, 201, 202, 204):
+                return {
+                    "available": True,
+                    "source_id": source_id,
+                    "records_pushed": len(records),
+                    "ingest_status": r.status_code,
+                }
+            return {
+                "available": False,
+                "source_id": source_id,
+                "error": f"Ingest HTTP {r.status_code}: {r.text[:200]}",
+            }
+        except Exception as e:
+            return {"available": False, "source_id": source_id, "error": str(e)}
+
+
 # Keep old name for backward compatibility — now calls create_data_source correctly
 async def nexla_create_rest_connector(
     name: str,

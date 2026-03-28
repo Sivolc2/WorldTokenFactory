@@ -23,6 +23,12 @@ from pathlib import Path
 
 from repo_src.backend.llm_chat.llm_interface import ask_llm, gemini_client
 from repo_src.backend.services.model_router import route_model, detect_task_type
+from repo_src.backend.services.live_data_sources import (
+    fetch_usgs_earthquakes,
+    fetch_nasa_eonet_events,
+    fetch_noaa_weather_alerts,
+    fetch_fema_disaster_declarations,
+)
 
 DATA_ROOT = Path(__file__).parent.parent.parent.parent / "data"
 
@@ -244,6 +250,28 @@ async def orchestrate_risk_assessment(
             fetch_augment_context(f"{risk_factor_name} {step_name} {domain}")
         )
 
+    # USGS earthquake catalog — recent seismic activity near location
+    if lat and lng:
+        tasks["usgs_earthquakes"] = asyncio.create_task(
+            fetch_usgs_earthquakes(lat, lng, radius_km=200, days=30)
+        )
+
+    # NASA EONET — active natural events globally
+    tasks["nasa_events"] = asyncio.create_task(
+        fetch_nasa_eonet_events(limit=5)
+    )
+
+    # NOAA NWS — active weather alerts near location
+    if lat and lng:
+        tasks["noaa_alerts"] = asyncio.create_task(
+            fetch_noaa_weather_alerts(lat, lng)
+        )
+
+    # FEMA OpenFEMA — recent disaster declarations (default TX; caller can override)
+    tasks["fema_history"] = asyncio.create_task(
+        fetch_fema_disaster_declarations(state="TX", limit=10)
+    )
+
     # Wait for all
     results = {}
     for name, task in tasks.items():
@@ -342,6 +370,77 @@ async def orchestrate_risk_assessment(
         if augment_results:
             evidence_sections.append(f"AUGMENT CONTEXT ENGINE:\n{str(augment_results)[:1000]}")
 
+    # USGS Earthquakes — GeoJSON features, properties contain mag/place/time
+    usgs = results.get("usgs_earthquakes", {})
+    if usgs.get("ok") and usgs.get("data"):
+        quakes = usgs["data"][:5]
+        quake_lines = []
+        for q in quakes:
+            props = q.get("properties", {}) if isinstance(q, dict) else {}
+            mag = props.get("mag", "?")
+            place = props.get("place", "?")
+            ts = props.get("time", "")
+            # USGS time is epoch ms; convert to readable date if possible
+            if ts:
+                try:
+                    from datetime import datetime, timezone
+                    readable = datetime.fromtimestamp(ts / 1000, tz=timezone.utc).strftime("%Y-%m-%d")
+                except Exception:
+                    readable = str(ts)
+            else:
+                readable = "?"
+            quake_lines.append(f"- M{mag} at {place} ({readable})")
+        evidence_sections.append(
+            f"USGS EARTHQUAKES (nearby, last 30 days, {usgs.get('count', 0)} total):\n"
+            + "\n".join(quake_lines)
+        )
+
+    # NASA EONET — active natural events
+    nasa = results.get("nasa_events", {})
+    if nasa.get("ok") and nasa.get("data"):
+        events = nasa["data"][:5]
+        event_lines = []
+        for e in events:
+            title = e.get("title", "?")
+            cats = e.get("categories", [])
+            cat_name = cats[0].get("title", "?") if cats else "?"
+            event_lines.append(f"- {title} ({cat_name})")
+        evidence_sections.append(
+            f"NASA ACTIVE NATURAL EVENTS ({nasa.get('count', 0)} total):\n"
+            + "\n".join(event_lines)
+        )
+
+    # NOAA NWS — active weather alerts, GeoJSON features
+    noaa = results.get("noaa_alerts", {})
+    if noaa.get("ok") and noaa.get("data"):
+        alerts = noaa["data"][:5]
+        alert_lines = []
+        for a in alerts:
+            props = a.get("properties", {}) if isinstance(a, dict) else {}
+            headline = props.get("headline", props.get("event", "?"))
+            alert_lines.append(f"- {headline}")
+        evidence_sections.append(
+            f"NOAA WEATHER ALERTS ({noaa.get('count', 0)} active):\n"
+            + "\n".join(alert_lines)
+        )
+    elif noaa.get("ok"):
+        evidence_sections.append("NOAA WEATHER ALERTS: No active alerts for this location.")
+
+    # FEMA OpenFEMA — disaster declaration history
+    fema = results.get("fema_history", {})
+    if fema.get("ok") and fema.get("data"):
+        declarations = fema["data"][:5]
+        fema_lines = []
+        for d in declarations:
+            title = d.get("declarationTitle", "?")
+            date_str = (d.get("declarationDate") or "")[:10]
+            inc_type = d.get("incidentType", "")
+            fema_lines.append(f"- {title} [{inc_type}] ({date_str})")
+        evidence_sections.append(
+            f"FEMA DISASTER HISTORY ({fema.get('count', 0)} records):\n"
+            + "\n".join(fema_lines)
+        )
+
     all_evidence = "\n\n".join(evidence_sections)
 
     prompt = (
@@ -408,6 +507,42 @@ async def orchestrate_risk_assessment(
     # Final token estimate
     total_tokens = (len(prompt) + len(response)) // 4
     yield {"event": "token_update", "tokens": total_tokens}
+
+    # ── Phase 5: Push analysis result to Nexla for storage/querying ─────
+    yield {"event": "step", "text": "Phase 5: Pushing analysis result to Nexla pipeline"}
+    try:
+        from repo_src.backend.services.nexla_service import nexla_push_records
+        safe_name = risk_factor_name[:30].replace(" ", "-").lower()
+        nexla_source_name = f"wtf-analysis-{safe_name}"
+        push_payload = [
+            {
+                "business_name": business_name,
+                "step_name": step_name,
+                "risk_factor_name": risk_factor_name,
+                "domain": domain,
+                "lat": lat,
+                "lng": lng,
+                "summary": parsed.get("summary", ""),
+                "metrics": parsed.get("metrics", {}),
+                "gaps": parsed.get("gaps", []),
+                "model_used": parsed.get("model_used", model_id),
+                "data_sources_queried": list(results.keys()),
+                "strongest_signal_modality": parsed.get("strongest_signal_modality", "unknown"),
+            }
+        ]
+        push_result = await nexla_push_records(nexla_source_name, push_payload)
+        if push_result.get("available"):
+            yield {
+                "event": "signal",
+                "text": (
+                    f"[nexla] Analysis result stored — source_id={push_result.get('source_id')}, "
+                    f"records_pushed={push_result.get('records_pushed')}"
+                ),
+            }
+        else:
+            yield {"event": "signal", "text": f"[nexla] Push skipped: {push_result.get('error', 'unknown')}"}
+    except Exception as e:
+        yield {"event": "signal", "text": f"[nexla] Push error (non-blocking): {e}"}
 
     # Build result
     from repo_src.backend.models.risk import AnalysisResult, RiskMetrics, Artifact
