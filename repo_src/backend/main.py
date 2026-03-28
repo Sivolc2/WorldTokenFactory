@@ -124,6 +124,97 @@ async def route_model_endpoint(request: dict):
         "model_info": get_model_info(model_id),
     }
 
+@app.get("/api/health")
+async def health_check():
+    """Comprehensive health check showing all integrated systems."""
+    import httpx
+
+    health = {
+        "status": "ok",
+        "version": "2.0.0",
+        "systems": {}
+    }
+
+    # Gemini
+    if os.getenv("GEMINI_API_KEY"):
+        health["systems"]["gemini"] = {"status": "configured", "model": "gemini-2.5-flash"}
+
+    # DO Gradient
+    if os.getenv("DIGITAL_OCEAN_MODEL_ACCESS_KEY"):
+        health["systems"]["gradient"] = {"status": "configured", "inference_url": "https://inference.do-ai.run/v1/"}
+
+    # Senso
+    senso_key = os.getenv("SENSO_API_KEY")
+    if senso_key:
+        try:
+            async with httpx.AsyncClient(timeout=5) as client:
+                r = await client.get(
+                    "https://apiv2.senso.ai/api/v1/org/credits/balance",
+                    headers={"X-API-Key": senso_key},
+                )
+                health["systems"]["senso"] = {
+                    "status": "connected" if r.status_code in (200, 202) else "error",
+                    "credits": r.json() if r.status_code in (200, 202) else None,
+                }
+        except Exception:
+            health["systems"]["senso"] = {"status": "timeout"}
+
+    # Unkey
+    if os.getenv("UNKEY_API_ID"):
+        health["systems"]["unkey"] = {"status": "configured", "api_id": os.getenv("UNKEY_API_ID")}
+
+    # Railtracks
+    try:
+        from repo_src.backend.agents.railtracks_orchestrator import RAILTRACKS_AVAILABLE
+        health["systems"]["railtracks"] = {"status": "available" if RAILTRACKS_AVAILABLE else "not_installed"}
+    except ImportError:
+        health["systems"]["railtracks"] = {"status": "import_error"}
+
+    # Model router
+    try:
+        from repo_src.backend.services.model_router import list_available_models
+        models = list_available_models()
+        health["systems"]["model_router"] = {"status": "ok", "models_available": len(models)}
+    except ImportError:
+        health["systems"]["model_router"] = {"status": "import_error"}
+
+    return health
+
+
+@app.post("/api/senso/ingest-all")
+async def senso_ingest_all():
+    """Batch ingest all local risk documents into Senso KB."""
+    import httpx
+    from pathlib import Path
+
+    senso_key = os.getenv("SENSO_API_KEY", "")
+    if not senso_key:
+        return {"status": "error", "message": "SENSO_API_KEY not set"}
+
+    data_root = Path(__file__).parent.parent.parent / "data"
+    results = []
+
+    async with httpx.AsyncClient(timeout=30) as client:
+        for md_file in data_root.rglob("*.md"):
+            if md_file.name == "README.md":
+                continue
+            title = md_file.stem.replace("_", " ").title()
+            text = md_file.read_text(encoding="utf-8")[:5000]
+            r = await client.post(
+                "https://apiv2.senso.ai/api/v1/org/kb/raw",
+                headers={"X-API-Key": senso_key, "Content-Type": "application/json"},
+                json={"title": title, "text": text},
+            )
+            results.append({
+                "file": str(md_file.relative_to(data_root)),
+                "title": title,
+                "status": r.status_code,
+                "id": r.json().get("id") if r.status_code in (200, 202) else None,
+            })
+
+    return {"ingested": len(results), "results": results}
+
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=int(os.getenv("PORT", "8000")), log_level=os.getenv("LOG_LEVEL", "info").lower())
