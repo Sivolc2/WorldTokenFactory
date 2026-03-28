@@ -15,6 +15,7 @@ import TokenEfficiencyChart, { type ChartPoint } from './components/TokenEfficie
 import ExecutiveReport from './components/ExecutiveReport';
 import AgentDebugPane from './components/AgentDebugPane';
 import ChatPanel from './components/ChatPanel';
+import OrchestrationPanel from './components/OrchestrationPanel';
 import DocumentViewer from './components/DocumentViewer';
 
 type AppScreen = 'input' | 'main';
@@ -91,6 +92,7 @@ export default function App() {
   const [agentThread, setAgentThread] = useState<AgentThreadState | null>(null);
   const [isRunningAll, setIsRunningAll] = useState(false);
   const [showChat, setShowChat] = useState(false);
+  const [showOrchestrator, setShowOrchestrator] = useState(false);
 
   const [tokenHistory, setTokenHistory] = useState<ChartPoint[]>([]);
   const [riskThreshold, setRiskThreshold] = useState<number | null>(null);
@@ -516,6 +518,54 @@ export default function App() {
             </div>
             <AgentDebugPane agentThread={agentThread} />
           </div>
+        </div>
+      )}
+
+      {/* ── Floating orchestrator toggle button ─────────────────────────── */}
+      <button
+        onClick={() => setShowOrchestrator(prev => !prev)}
+        title={showOrchestrator ? 'Close orchestrator' : 'Open orchestrator'}
+        style={{
+          position: 'fixed',
+          bottom: '24px',
+          right: '84px',
+          zIndex: 1000,
+          width: '48px',
+          height: '48px',
+          borderRadius: '50%',
+          background: showOrchestrator ? 'rgba(0, 204, 255, 0.15)' : '#00ccff',
+          border: showOrchestrator ? '1px solid rgba(0, 204, 255, 0.4)' : 'none',
+          color: showOrchestrator ? '#00ccff' : '#0a0a0f',
+          fontSize: '18px',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          cursor: 'pointer',
+          boxShadow: showOrchestrator
+            ? '0 0 16px rgba(0, 204, 255, 0.3)'
+            : '0 4px 20px rgba(0, 204, 255, 0.35)',
+          transition: 'all 0.2s ease',
+        }}
+      >
+        {showOrchestrator ? '✕' : '⚡'}
+      </button>
+
+      {/* ── Orchestrator panel ─────────────────────────────────────────── */}
+      {showOrchestrator && (
+        <div
+          style={{
+            position: 'fixed',
+            top: '60px',
+            right: '24px',
+            bottom: '84px',
+            zIndex: 999,
+            width: '480px',
+            borderRadius: '12px',
+            overflow: 'hidden',
+            boxShadow: '0 8px 40px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(0, 204, 255, 0.2)',
+          }}
+        >
+          <OrchestrationPanel />
         </div>
       )}
 
