@@ -56,7 +56,13 @@ export default function StepChainOverlay({
 
         return (
           <div key={step.id} className="step-chain__item">
-            {i > 0 && <div className="step-chain__arrow">→</div>}
+            {i > 0 && (
+              <div className="step-chain__cascade">
+                <div className="step-chain__cascade-line" />
+                <span className="step-chain__cascade-label">cascades</span>
+                <div className="step-chain__cascade-head">▶</div>
+              </div>
+            )}
             <button
               className={`step-card${isSelected ? ' step-card--selected' : ''}${isInitial ? ' step-card--initial' : ''}`}
               style={{ '--step-color': accentColor } as React.CSSProperties}
@@ -87,7 +93,6 @@ export default function StepChainOverlay({
                   <span className="step-card__tag step-card__tag--initial" style={{ background: accentColor }}>
                     {riskLabel(initScore!)}
                   </span>
-                  <span className="step-card__un step-card__un--initial">~UN {formatPct(initial.uncertainty)}</span>
                   <span className="step-card__un step-card__un--initial">~FR {formatPct(initial.failure_rate)}</span>
                 </div>
               ) : (

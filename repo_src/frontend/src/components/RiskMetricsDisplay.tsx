@@ -26,11 +26,10 @@ function RiskBar({ label, value }: { label: string; value: number; dark?: boolea
 }
 
 export default function RiskMetricsDisplay({ metrics, dark = false }: RiskMetricsDisplayProps) {
-  const { failure_rate, uncertainty, loss_range_low, loss_range_high, loss_range_note } = metrics;
+  const { failure_rate, loss_range_low, loss_range_high, loss_range_note } = metrics;
   return (
     <div className={`risk-metrics${dark ? ' risk-metrics--dark' : ''}`}>
       <RiskBar label="Failure Rate" value={failure_rate} dark={dark} />
-      <RiskBar label="Uncertainty"  value={uncertainty}  dark={dark} />
       <div className="risk-loss-range">
         <div className="risk-loss-header">Potential Loss</div>
         <div className="risk-loss-bar-container">

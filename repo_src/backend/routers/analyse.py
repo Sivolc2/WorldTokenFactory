@@ -14,11 +14,13 @@ async def analyse_endpoint(request: AnalyseRequest, _auth: dict = Depends(verify
     request_id = str(uuid.uuid4())
 
     async def generate():
-        from repo_src.backend.agents.oil_canned import OIL_RF_IDS, stream_oil_d1, stream_oil_d2
+        from repo_src.backend.agents.oil_canned import OIL_RF_IDS, stream_oil_d1, stream_oil_d2, stream_oil_d3
         if request.risk_factor_id in OIL_RF_IDS and request.depth == 1:
             gen = stream_oil_d1(request.risk_factor_id)
         elif request.risk_factor_id in OIL_RF_IDS and request.depth == 2:
             gen = stream_oil_d2(request.risk_factor_id)
+        elif request.risk_factor_id in OIL_RF_IDS and request.depth == 3:
+            gen = stream_oil_d3(request.risk_factor_id)
         elif request.depth == 1:
             from repo_src.backend.agents.depth1 import analyse_depth1
             gen = analyse_depth1(

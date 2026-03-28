@@ -18,11 +18,17 @@ export interface SectionMetric {
   isAnalyzed: boolean;
 }
 
+interface ContentBlock {
+  minDepth: number;
+  content: string;
+}
+
 interface Props {
   markdown: string;
   activeSectionId: string | null;
   sectionLocations: Record<string, MapFocus>;
   sectionMetrics?: Record<string, SectionMetric>;
+  achievedDepth?: number;
   onSectionFocus: (sectionId: string, location: MapFocus | null) => void;
 }
 
@@ -37,7 +43,6 @@ function riskLevel(fr: number): 'critical' | 'high' | 'med' | 'low' {
   return 'low';
 }
 
-// Detect status/uncertainty keywords and return a color class
 function statusColor(line: string): string | null {
   const lower = line.toLowerCase();
   if (lower.includes('critical')) return 'critical';
@@ -46,6 +51,29 @@ function statusColor(line: string): string | null {
   if (lower.includes('moderate') || lower.includes('elevated')) return 'med';
   if (lower.includes('low') || lower.includes('latent')) return 'low';
   return null;
+}
+
+function SatelliteCard({ filename, caption }: { filename: string; caption: string }) {
+  const isPermian = filename.includes('permian');
+  const coords = isPermian ? 'N31–32, W102–103' : 'N35–36, W96–97';
+  const label = isPermian ? 'Delaware Basin / Permian' : 'Cushing Hub / Oklahoma';
+
+  return (
+    <div className="dv-sat-card">
+      <div className="dv-sat-card__header">
+        <span className="dv-sat-card__icon">🛰</span>
+        <span className="dv-sat-card__label">Satellite — Terrain (DEM 30m)</span>
+        <span className="dv-sat-card__file">{filename}</span>
+      </div>
+      <div className="dv-sat-card__gradient" title="Elevation colour scale: low (green) → mid (tan) → high (white)" />
+      <div className="dv-sat-card__meta">
+        <span className="dv-sat-card__region">{label}</span>
+        <span className="dv-sat-card__coords">{coords}</span>
+        <span className="dv-sat-card__res">Copernicus · 30m resolution</span>
+      </div>
+      <p className="dv-sat-card__caption">{caption}</p>
+    </div>
+  );
 }
 
 function renderInline(text: string): React.ReactNode {
@@ -66,6 +94,12 @@ function renderContent(content: string): React.ReactNode[] {
   while (i < lines.length) {
     const line = lines[i];
 
+    // Satellite card: [sat: filename | caption]
+    const satMatch = line.match(/^\[sat:\s*([^\|]+)\s*\|\s*(.+)\]$/);
+    if (satMatch) {
+      nodes.push(<SatelliteCard key={i} filename={satMatch[1].trim()} caption={satMatch[2].trim()} />);
+      i++; continue;
+    }
     // Sub-heading ###
     if (line.startsWith('### ')) {
       nodes.push(<h4 key={i} className="dv-h3">{renderInline(line.slice(4))}</h4>);
@@ -104,7 +138,7 @@ function renderContent(content: string): React.ReactNode[] {
       );
       continue;
     }
-    // Table rows
+    // Table
     if (line.startsWith('|')) {
       const tableLines: string[] = [];
       while (i < lines.length && lines[i].startsWith('|')) {
@@ -140,13 +174,11 @@ function renderContent(content: string): React.ReactNode[] {
       continue;
     }
     // Empty line
-    if (line.trim() === '') {
-      i++; continue;
-    }
-    // Status / uncertainty lines — render with colored pill
+    if (line.trim() === '') { i++; continue; }
+    // Status / uncertainty lines
     if (line.startsWith('**Status**:') || line.startsWith('**Uncertainty level**:')) {
       const colonIdx = line.indexOf(':');
-      const label = line.slice(2, colonIdx - 2); // strip **...**
+      const label = line.slice(2, colonIdx - 2);
       const value = line.slice(colonIdx + 1).trim();
       const color = statusColor(value);
       nodes.push(
@@ -162,6 +194,31 @@ function renderContent(content: string): React.ReactNode[] {
     i++;
   }
   return nodes;
+}
+
+/** Split section content into depth-gated blocks. */
+function parseContentBlocks(content: string): ContentBlock[] {
+  const lines = content.split('\n');
+  const blocks: ContentBlock[] = [];
+  let currentDepth = 0;
+  let currentLines: string[] = [];
+
+  for (const line of lines) {
+    const m = line.match(/^<!--\s*depth:(\d+)\s*-->$/);
+    if (m) {
+      if (currentLines.some(l => l.trim())) {
+        blocks.push({ minDepth: currentDepth, content: currentLines.join('\n') });
+      }
+      currentLines = [];
+      currentDepth = parseInt(m[1]);
+    } else {
+      currentLines.push(line);
+    }
+  }
+  if (currentLines.some(l => l.trim())) {
+    blocks.push({ minDepth: currentDepth, content: currentLines.join('\n') });
+  }
+  return blocks;
 }
 
 export function parseDocSections(markdown: string, sectionLocations: Record<string, MapFocus>): DocSection[] {
@@ -183,14 +240,7 @@ export function parseDocSections(markdown: string, sectionLocations: Record<stri
       contentLines = [];
       const rawHeading = line.slice(3).trim();
       const id = slugify(rawHeading);
-      currentSection = {
-        id,
-        heading: rawHeading,
-        rawHeading,
-        level: 2,
-        content: '',
-        location: sectionLocations[id],
-      };
+      currentSection = { id, heading: rawHeading, rawHeading, level: 2, content: '', location: sectionLocations[id] };
     } else {
       contentLines.push(line);
     }
@@ -199,7 +249,9 @@ export function parseDocSections(markdown: string, sectionLocations: Record<stri
   return sections;
 }
 
-export default function DocumentViewer({ markdown, activeSectionId, sectionLocations, sectionMetrics, onSectionFocus }: Props) {
+export default function DocumentViewer({
+  markdown, activeSectionId, sectionLocations, sectionMetrics, achievedDepth = 0, onSectionFocus,
+}: Props) {
   const sections = useMemo(() => parseDocSections(markdown, sectionLocations), [markdown, sectionLocations]);
   const sectionRefs = useRef<Map<string, HTMLDivElement>>(new Map());
 
@@ -215,6 +267,9 @@ export default function DocumentViewer({ markdown, activeSectionId, sectionLocat
         const isActive = section.id === activeSectionId;
         const metric = sectionMetrics?.[section.id];
         const level = metric ? riskLevel(metric.failureRate) : null;
+        const blocks = parseContentBlocks(section.content);
+        const maxBlockDepth = blocks.reduce((m, b) => Math.max(m, b.minDepth), 0);
+        const nextDepthNeeded = blocks.find(b => b.minDepth > achievedDepth)?.minDepth ?? null;
 
         return (
           <div
@@ -251,7 +306,20 @@ export default function DocumentViewer({ markdown, activeSectionId, sectionLocat
             )}
 
             <div className="dv-content">
-              {renderContent(section.content)}
+              {blocks.map((block, bi) =>
+                achievedDepth >= block.minDepth ? (
+                  <div key={bi} className="dv-block dv-block--visible">
+                    {renderContent(block.content)}
+                  </div>
+                ) : null
+              )}
+
+              {nextDepthNeeded !== null && maxBlockDepth > achievedDepth && (
+                <div className="dv-locked-hint">
+                  <span className="dv-locked-hint__icon">▸</span>
+                  Run D{nextDepthNeeded} analysis to reveal{nextDepthNeeded === 2 ? ' detailed assessment + satellite imagery' : ' deeper analysis'}
+                </div>
+              )}
             </div>
           </div>
         );

@@ -233,6 +233,11 @@ export default function App() {
     return result;
   }, [mapType, steps, analysisResults]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  const achievedDepth = useMemo(
+    () => Object.values(analysisResults).reduce((m, r) => Math.max(m, r.depth), 0),
+    [analysisResults]
+  );
+
   // ── Decompose ──────────────────────────────────────────────────────────────
 
   const handleSubmit = useCallback(async (description: string) => {
@@ -552,6 +557,7 @@ export default function App() {
                   activeSectionId={activeDocSection}
                   sectionLocations={mapType === 'oil' ? OIL_SECTION_LOCATIONS : {}}
                   sectionMetrics={sectionMetrics}
+                  achievedDepth={achievedDepth}
                   onSectionFocus={handleSectionFocus}
                 />
               ) : (

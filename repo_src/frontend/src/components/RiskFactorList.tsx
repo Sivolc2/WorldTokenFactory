@@ -51,7 +51,7 @@ export default function RiskFactorList({
               <div className="rf-item__name">{rf.name}</div>
               {result ? (
                 <div className="rf-item__metrics">
-                  FR {formatPct(result.metrics.failure_rate)} · UN {formatPct(result.metrics.uncertainty)}
+                  FR {formatPct(result.metrics.failure_rate)}
                 </div>
               ) : isRunning ? (
                 <div className="rf-item__metrics">Running…</div>

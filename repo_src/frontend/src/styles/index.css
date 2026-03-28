@@ -935,12 +935,41 @@ textarea, input { font-family: inherit; }
   align-items: center;
 }
 
-.step-chain__arrow {
-  font-size: 16px;
-  color: rgba(255,255,255,0.8);
-  padding: 0 2px;
+.step-chain__cascade {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
   flex-shrink: 0;
-  text-shadow: 0 1px 3px rgba(0,0,0,0.4);
+  width: 52px;
+  gap: 2px;
+  position: relative;
+}
+
+.step-chain__cascade-line {
+  width: 100%;
+  height: 2px;
+  background: linear-gradient(90deg, rgba(255,160,0,0.5) 0%, rgba(255,80,60,0.85) 100%);
+  border-radius: 1px;
+  box-shadow: 0 0 6px rgba(255,120,40,0.5);
+}
+
+.step-chain__cascade-label {
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: rgba(255, 200, 100, 0.95);
+  text-shadow: 0 1px 4px rgba(0,0,0,0.7);
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.step-chain__cascade-head {
+  font-size: 8px;
+  color: rgba(255,100,60,0.9);
+  line-height: 1;
+  text-shadow: 0 1px 4px rgba(0,0,0,0.6);
+  margin-top: -1px;
 }
 
 .step-card {
@@ -1999,6 +2028,93 @@ textarea, input { font-family: inherit; }
 .dv-status-pill--high     { background: #fff7ed; border-color: #fdba74; color: #9a3412; }
 .dv-status-pill--med      { background: #fefce8; border-color: #fde047; color: #854d0e; }
 .dv-status-pill--low      { background: #f0fdf4; border-color: #86efac; color: #166534; }
+
+/* ─── DOCUMENT VIEWER: DEPTH-GATED BLOCKS ───────────────── */
+
+.dv-block--visible {
+  animation: dv-reveal 0.35s ease both;
+}
+
+@keyframes dv-reveal {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.dv-locked-hint {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 10px 0 6px;
+  padding: 7px 12px;
+  border: 1px dashed #cbd5e1;
+  border-radius: 6px;
+  font-size: 11px;
+  color: #94a3b8;
+  background: #f8fafc;
+}
+
+.dv-locked-hint__icon { font-size: 10px; color: #cbd5e1; }
+
+/* ─── DOCUMENT VIEWER: SATELLITE CARD ───────────────────── */
+
+.dv-sat-card {
+  margin: 14px 0;
+  border: 1px solid #1e2736;
+  border-radius: 8px;
+  background: #0d1117;
+  overflow: hidden;
+  font-family: 'Menlo', 'Courier New', monospace;
+}
+
+.dv-sat-card__header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border-bottom: 1px solid #21262d;
+}
+
+.dv-sat-card__icon { font-size: 14px; }
+
+.dv-sat-card__label {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #58a6ff;
+}
+
+.dv-sat-card__file { margin-left: auto; font-size: 9px; color: #484f58; }
+
+.dv-sat-card__gradient {
+  height: 10px;
+  background: linear-gradient(to right,
+    #1a3a1a 0%, #2d5a2d 10%, #4a7c4a 20%, #6b9e6b 30%,
+    #c8b97a 45%, #a08c5a 55%, #7a6040 65%, #5a4030 75%,
+    #8a7a6a 85%, #c8bfb0 95%, #e8e0d8 100%
+  );
+}
+
+.dv-sat-card__meta {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 6px 12px;
+  border-bottom: 1px solid #21262d;
+}
+
+.dv-sat-card__region { font-size: 11px; font-weight: 600; color: #e6edf3; }
+.dv-sat-card__coords { font-size: 10px; color: #7d8590; }
+.dv-sat-card__res    { margin-left: auto; font-size: 9px; color: #484f58; }
+
+.dv-sat-card__caption {
+  margin: 0;
+  padding: 8px 12px;
+  font-size: 10px;
+  line-height: 1.5;
+  color: #7d8590;
+  font-family: inherit;
+}
 
 .dv-h2 {
   font-size: 16px;

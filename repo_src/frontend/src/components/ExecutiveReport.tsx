@@ -21,8 +21,6 @@ function MetricPill({ metrics, faint }: { metrics: RiskMetrics; faint?: boolean 
     <span className={`er-pill ${faint ? 'er-pill--faint' : ''}`}>
       <span className="er-pill__fr">FR {formatPct(metrics.failure_rate)}</span>
       <span className="er-pill__dot">·</span>
-      <span className="er-pill__un">Un {formatPct(metrics.uncertainty)}</span>
-      <span className="er-pill__dot">·</span>
       <span className="er-pill__range">
         {formatUSD(metrics.loss_range_low)}–{formatUSD(metrics.loss_range_high)}
       </span>
