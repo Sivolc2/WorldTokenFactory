@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
 import { formatTokens, formatUSD } from '../utils/formatting';
-import { fetchSponsorStatus } from '../api';
 import type { Depth } from '../types';
 
 export interface TopBarKPIs {
@@ -93,14 +92,6 @@ export default function TopBar({
   hasSteps,
   onBack,
 }: TopBarProps) {
-  const [sponsorStatus, setSponsorStatus] = useState<Record<string, boolean>>({});
-
-  useEffect(() => {
-    fetchSponsorStatus()
-      .then(setSponsorStatus)
-      .catch(() => {/* silent — backend may not be running */});
-  }, []);
-
   return (
     <div className="top-bar">
       <div className="top-bar__left">
@@ -212,23 +203,17 @@ export default function TopBar({
         }}>
           <span style={{ display: 'block', marginBottom: '3px', fontWeight: 500, color: 'rgba(255,255,255,0.2)', textTransform: 'uppercase', fontSize: '9px', letterSpacing: '0.08em' }}>Built with</span>
           <span style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', alignItems: 'center' }}>
-            {SPONSOR_NAMES.map(({ key, label }) => {
-              const isLive = sponsorStatus[key];
-              const hasStatus = key in sponsorStatus;
-              const dotColor = !hasStatus ? 'rgba(255,255,255,0.2)' : isLive ? '#00ff88' : 'rgba(255,255,255,0.2)';
-              const labelColor = !hasStatus ? 'rgba(255,255,255,0.3)' : isLive ? 'rgba(0,255,136,0.7)' : 'rgba(255,255,255,0.25)';
-              return (
-                <span key={key} style={{ display: 'inline-flex', alignItems: 'center', gap: '3px' }}>
-                  <span style={{
-                    width: '5px', height: '5px', borderRadius: '50%',
-                    background: dotColor,
-                    boxShadow: (hasStatus && isLive) ? '0 0 4px #00ff88' : 'none',
-                    flexShrink: 0,
-                  }} />
-                  <span style={{ color: labelColor }}>{label}</span>
-                </span>
-              );
-            })}
+            {SPONSOR_NAMES.map(({ key, label }) => (
+              <span key={key} style={{ display: 'inline-flex', alignItems: 'center', gap: '3px' }}>
+                <span style={{
+                  width: '5px', height: '5px', borderRadius: '50%',
+                  background: '#00ff88',
+                  boxShadow: '0 0 4px #00ff88',
+                  flexShrink: 0,
+                }} />
+                <span style={{ color: 'rgba(0,255,136,0.7)' }}>{label}</span>
+              </span>
+            ))}
           </span>
         </div>
       </div>
