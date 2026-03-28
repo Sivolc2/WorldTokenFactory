@@ -32,25 +32,27 @@ export default function StepBox({
   const riskScore = getStepRiskScore(step, analysisResults);
   const bgColor = riskScoreToColor(riskScore);
 
-  // Aggregate metrics across analyzed risk factors for this step
-  const analyzed = step.risk_factors.filter((rf) => analysisResults[rf.id]);
-  const hasMetrics = analyzed.length > 0;
+  // Aggregate metrics: use analysis result if available, else initial_metrics
+  const withMetrics = step.risk_factors.filter(
+    (rf) => analysisResults[rf.id]?.metrics || rf.initial_metrics
+  );
+  const hasMetrics = withMetrics.length > 0;
 
   let avgFR = 0;
   let avgUN = 0;
-  let minLoss = Infinity;
-  let maxLoss = -Infinity;
+  let totalLoss = 0;
+  let totalLossHigh = 0;
 
   if (hasMetrics) {
-    for (const rf of analyzed) {
-      const r = analysisResults[rf.id];
-      avgFR += r.metrics.failure_rate;
-      avgUN += r.metrics.uncertainty;
-      minLoss = Math.min(minLoss, r.metrics.loss_range_low);
-      maxLoss = Math.max(maxLoss, r.metrics.loss_range_high);
+    for (const rf of withMetrics) {
+      const m = analysisResults[rf.id]?.metrics ?? rf.initial_metrics!;
+      avgFR += m.failure_rate;
+      avgUN += m.uncertainty;
+      totalLoss += m.loss_range_low;
+      totalLossHigh += m.loss_range_high;
     }
-    avgFR /= analyzed.length;
-    avgUN /= analyzed.length;
+    avgFR /= withMetrics.length;
+    avgUN /= withMetrics.length;
   }
 
   const runningCount = step.risk_factors.filter(
@@ -81,7 +83,7 @@ export default function StepBox({
             </div>
           </div>
           <div className="step-box__loss">
-            {formatUSD(minLoss)} – {formatUSD(maxLoss)}
+            {formatUSD(totalLoss)} – {formatUSD(totalLossHigh)}
           </div>
         </>
       ) : runningCount > 0 ? (

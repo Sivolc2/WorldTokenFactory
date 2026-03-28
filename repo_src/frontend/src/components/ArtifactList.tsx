@@ -108,6 +108,35 @@ function YouTubeArtifact({ artifact }: { artifact: Artifact }) {
   );
 }
 
+function VideoArtifact({ artifact }: { artifact: Artifact }) {
+  const [expanded, setExpanded] = useState(false);
+  const src = getMediaUrl(artifact.domain, artifact.filename);
+  const label = artifact.filename.split('/').pop() ?? artifact.filename;
+
+  return (
+    <div className="artifact-item">
+      <div className="artifact-item__main">
+        <span className="artifact-item__icon">🎬</span>
+        <div className="artifact-item__info">
+          <div className="artifact-item__filename">{label}</div>
+          <div className="artifact-item__domain">/{artifact.domain}/</div>
+          {artifact.relevance && (
+            <div className="artifact-item__relevance">{artifact.relevance}</div>
+          )}
+        </div>
+        <button className="artifact-item__toggle" onClick={() => setExpanded((v) => !v)}>
+          {expanded ? '▲ Hide' : '▶ Play'}
+        </button>
+      </div>
+      {expanded && (
+        <div className="artifact-item__preview">
+          <video controls src={src} style={{ width: '100%', borderRadius: 4 }} preload="metadata" />
+        </div>
+      )}
+    </div>
+  );
+}
+
 function AudioArtifact({ artifact }: { artifact: Artifact }) {
   const src = getMediaUrl(artifact.domain, artifact.filename);
 
@@ -162,6 +191,8 @@ export default function ArtifactList({ artifacts }: ArtifactListProps) {
               return <ImageArtifact key={i} artifact={artifact} />;
             case 'youtube':
               return <YouTubeArtifact key={i} artifact={artifact} />;
+            case 'video':
+              return <VideoArtifact key={i} artifact={artifact} />;
             case 'audio':
               return <AudioArtifact key={i} artifact={artifact} />;
             case 'data':

@@ -2,6 +2,7 @@ import type { Step, RiskFactor, AnalysisResult, Depth } from '../types';
 import RiskBarChart from './RiskBarChart';
 import ArtifactList from './ArtifactList';
 import DepthPicker from './DepthPicker';
+import TokenEfficiencyChart, { type ChartPoint } from './TokenEfficiencyChart';
 
 interface LHSPanelProps {
   selectedStep: Step | null;
@@ -13,6 +14,10 @@ interface LHSPanelProps {
   onSelectRf: (rfId: string) => void;
   onDepthChange: (rfId: string, depth: Depth) => void;
   onAnalyse: (rfId: string) => void;
+  tokenHistory: ChartPoint[];
+  forecastCurve: ChartPoint[];
+  riskThreshold: number | null;
+  onThresholdChange: (v: number) => void;
 }
 
 export default function LHSPanel({
@@ -25,14 +30,32 @@ export default function LHSPanel({
   onSelectRf,
   onDepthChange,
   onAnalyse,
+  tokenHistory,
+  forecastCurve,
+  riskThreshold,
+  onThresholdChange,
 }: LHSPanelProps) {
   const selectedResult = selectedRfId ? analysisResults[selectedRfId] : undefined;
   const selectedRf: RiskFactor | undefined = selectedStep?.risk_factors.find(
     (rf) => rf.id === selectedRfId
   );
 
+  const showChart = tokenHistory.length > 0 || forecastCurve.length > 0;
+
   return (
     <div className="lhs-panel">
+      {/* Token efficiency chart — always shown when data is available */}
+      {showChart && (
+        <div className="lhs-section lhs-section--chart">
+          <TokenEfficiencyChart
+            liveCurve={tokenHistory}
+            forecastCurve={forecastCurve}
+            threshold={riskThreshold}
+            onThresholdChange={onThresholdChange}
+          />
+        </div>
+      )}
+
       {selectedStep ? (
         <>
           {/* Section: risk comparison bars */}

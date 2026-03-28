@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef, useMemo } from 'react';
+import { useState, useCallback, useRef, useMemo, useEffect } from 'react';
 import type {
   Step,
   Depth,
@@ -6,16 +6,26 @@ import type {
   AgentThreadState,
   AgentThreadStep,
 } from './types';
-import { streamDecompose, streamAnalyse } from './api';
+import { streamDecompose, streamAnalyse, getMediaUrl, fetchDocument } from './api';
 import TopBar, { type TopBarKPIs } from './components/TopBar';
 import BusinessInput from './components/BusinessInput';
-import MapView, { detectMapType, type BusinessMapType } from './components/MapView';
+import MapView, { detectMapType, type BusinessMapType, type MapFocus } from './components/MapView';
 import StepChainOverlay from './components/StepChainOverlay';
-import LHSPanel from './components/LHSPanel';
-import RHSPanel from './components/RHSPanel';
+import TokenEfficiencyChart, { type ChartPoint } from './components/TokenEfficiencyChart';
+import ExecutiveReport from './components/ExecutiveReport';
+import AgentDebugPane from './components/AgentDebugPane';
 import ChatPanel from './components/ChatPanel';
+import DocumentViewer from './components/DocumentViewer';
 
 type AppScreen = 'input' | 'main';
+
+/** Sum of (high − low) across all factors, using best available metrics. */
+function portfolioUncertainty(steps: Step[], results: Record<string, AnalysisResult>): number {
+  return steps.flatMap((s) => s.risk_factors).reduce((sum, rf) => {
+    const m = results[rf.id]?.metrics ?? rf.initial_metrics;
+    return sum + (m ? m.loss_range_high - m.loss_range_low : 0);
+  }, 0);
+}
 
 function tokenEstimateNumber(depth: Depth): number {
   switch (depth) {
@@ -23,6 +33,40 @@ function tokenEstimateNumber(depth: Depth): number {
     case 2: return 3000;
     case 3: return 200000;
   }
+}
+
+const OIL_STEP_FOCUSES: MapFocus[] = [
+  { center: [31.47, -103.74], zoom: 11, tiffUrl: getMediaUrl('oil', 'artifacts/permian_basin_midland_dem_30m.tif') }, // Permian fields — Delaware Basin well pad grid
+  { center: [30.92, -102.47], zoom: 10, tiffUrl: getMediaUrl('oil', 'artifacts/cushing_oklahoma_dem_30m.tif') },       // Midstream egress — Waha Hub / Cushing terrain
+  { center: [28.17, -88.49],  zoom: 9  },                                                                               // GOM offshore buffer — Thunder Horse PDQ (no DEM)
+];
+
+const _LEMMING_DEM = getMediaUrl('lemming', 'artifacts/hardangervidda_lemming_habitat_dem_30m.tif');
+const LEMMING_STEP_FOCUSES: MapFocus[] = [
+  { center: [70.3, 28.0],  zoom: 5, tiffUrl: _LEMMING_DEM },
+  { center: [70.1, 27.5],  zoom: 5, tiffUrl: _LEMMING_DEM },
+  { center: [70.5, 26.0],  zoom: 5, tiffUrl: _LEMMING_DEM },
+  { center: [70.0, 25.0],  zoom: 5, tiffUrl: _LEMMING_DEM },
+  { center: [69.8, 26.5],  zoom: 5, tiffUrl: _LEMMING_DEM },
+];
+
+const _PERMIAN_DEM = getMediaUrl('oil', 'artifacts/permian_basin_midland_dem_30m.tif');
+const _CUSHING_DEM = getMediaUrl('oil', 'artifacts/cushing_oklahoma_dem_30m.tif');
+
+const OIL_SECTION_LOCATIONS: Record<string, MapFocus> = {
+  'risk-vector-1-power-infrastructure-failure':          { center: [31.47, -103.74], zoom: 11, tiffUrl: _PERMIAN_DEM },
+  'risk-vector-2-subsurface-pressure-zombie-well-crisis':{ center: [31.47, -103.74], zoom: 10, tiffUrl: _PERMIAN_DEM },
+  'risk-vector-3-gas-pipeline-bottleneck-waha-hub':      { center: [30.92, -102.47], zoom: 10, tiffUrl: _PERMIAN_DEM },
+  'compounding-risk-assessment':                         { center: [31.1,  -103.0],  zoom: 8,  tiffUrl: _PERMIAN_DEM },
+  'production-impact-scenarios':                         { center: [31.1,  -103.0],  zoom: 7,  tiffUrl: _PERMIAN_DEM },
+  'data-sources':                                        { center: [30.0,  -97.0],   zoom: 6,  tiffUrl: _CUSHING_DEM },
+};
+
+function getStepFocus(mapType: BusinessMapType, stepPosition: number): MapFocus | null {
+  const focuses = mapType === 'oil' ? OIL_STEP_FOCUSES
+    : mapType === 'lemming' ? LEMMING_STEP_FOCUSES
+    : null;
+  return focuses?.[stepPosition - 1] ?? null;
 }
 
 export default function App() {
@@ -48,25 +92,74 @@ export default function App() {
   const [isRunningAll, setIsRunningAll] = useState(false);
   const [showChat, setShowChat] = useState(false);
 
+  const [tokenHistory, setTokenHistory] = useState<ChartPoint[]>([]);
+  const [riskThreshold, setRiskThreshold] = useState<number | null>(null);
+  const [mapFocus, setMapFocus] = useState<MapFocus | null>(null);
+  const [docMarkdown, setDocMarkdown] = useState('');
+  const [activeDocSection, setActiveDocSection] = useState<string | null>(null);
+
   const abortControllersRef = useRef<Map<string, AbortController>>(new Map());
+  // Refs so handleAnalyse always sees current values without stale closures
+  const analysisResultsRef = useRef<Record<string, AnalysisResult>>({});
+  const totalTokensRef = useRef(0);
+  useEffect(() => { analysisResultsRef.current = analysisResults; }, [analysisResults]);
+  useEffect(() => { totalTokensRef.current = totalTokens; }, [totalTokens]);
 
   // ── KPIs ───────────────────────────────────────────────────────────────────
 
   const kpis = useMemo((): TopBarKPIs | null => {
-    const results = Object.values(analysisResults);
-    if (results.length === 0) return null;
-    let totalLow = 0, totalHigh = 0, criticalCount = 0;
-    for (const r of results) {
-      totalLow  += r.metrics.loss_range_low;
-      totalHigh += r.metrics.loss_range_high;
-      if (r.metrics.failure_rate > 0.6 || r.metrics.uncertainty > 0.6) criticalCount++;
+    const allRfs = steps.flatMap((s) => s.risk_factors);
+    if (allRfs.length === 0) return null;
+    let totalLow = 0, totalHigh = 0, criticalCount = 0, analyzedCount = 0, hasAny = false;
+    for (const rf of allRfs) {
+      const metrics = analysisResults[rf.id]?.metrics ?? rf.initial_metrics;
+      if (!metrics) continue;
+      hasAny = true;
+      totalLow  += metrics.loss_range_low;
+      totalHigh += metrics.loss_range_high;
+      if (metrics.failure_rate > 0.6 || metrics.uncertainty > 0.6) criticalCount++;
+      if (analysisResults[rf.id]) analyzedCount++;
     }
+    if (!hasAny) return null;
     return {
       totalExposureLow: totalLow, totalExposureHigh: totalHigh,
-      criticalCount, analyzedCount: results.length,
-      totalRiskFactors: steps.reduce((n, s) => n + s.risk_factors.length, 0),
+      criticalCount, analyzedCount,
+      totalRiskFactors: allRfs.length,
     };
   }, [analysisResults, steps]);
+
+  // ── Token efficiency history + forecast ────────────────────────────────────
+
+  // Seed the live curve once steps arrive (uses initial_metrics as baseline)
+  useEffect(() => {
+    if (steps.length === 0 || tokenHistory.length > 0) return;
+    const unc = portfolioUncertainty(steps, {});
+    if (unc > 0) {
+      setTokenHistory([{ tokens: 0, uncertainty: unc }]);
+      setRiskThreshold(unc * 0.3);
+    }
+  }, [steps]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Fetch the primary document when the map type is known
+  useEffect(() => {
+    if (mapType !== 'oil') return;
+    fetchDocument('oil', 'permian_basin_risk_brief.md')
+      .then(setDocMarkdown)
+      .catch(() => {/* silent */});
+  }, [mapType]);
+
+  const forecastCurve = useMemo((): ChartPoint[] => {
+    if (tokenHistory.length === 0) return [];
+    const initialUnc = tokenHistory[0].uncertainty;
+    const N = steps.flatMap((s) => s.risk_factors).length;
+    if (N === 0 || initialUnc === 0) return [];
+    return [
+      { tokens: 0,           uncertainty: initialUnc },
+      { tokens: N * 350,     uncertainty: initialUnc * 0.55 },
+      { tokens: N * 3_000,   uncertainty: initialUnc * 0.25 },
+      { tokens: N * 200_000, uncertainty: initialUnc * 0.08 },
+    ];
+  }, [tokenHistory, steps]);
 
   // ── Decompose ──────────────────────────────────────────────────────────────
 
@@ -222,15 +315,20 @@ export default function App() {
             break;
           case 'complete':
             if (event.result) {
+              const newResult = event.result!;
+              const newResults = { ...analysisResultsRef.current, [rfId]: newResult };
+              const newTotal   = totalTokensRef.current + newResult.tokens_used;
+              const newUnc     = portfolioUncertainty(steps, newResults);
+              setTokenHistory((h) => [...h, { tokens: newTotal, uncertainty: newUnc }]);
               updateThread((t) => ({
                 ...t,
                 steps: t.steps.map((s) => ({ ...s, status: 'complete' as const })),
-                tokens_current: event.result!.tokens_used,
+                tokens_current: newResult.tokens_used,
                 is_complete: true,
-                result: event.result,
+                result: newResult,
               }));
-              setAnalysisResults((prev) => ({ ...prev, [rfId]: event.result! }));
-              setTotalTokens((prev) => prev + event.result!.tokens_used);
+              setAnalysisResults(newResults);
+              setTotalTokens(newTotal);
             }
             break;
           case 'error':
@@ -261,13 +359,26 @@ export default function App() {
     setIsRunningAll(false);
   }, [isRunningAll, steps, analysisResults, runningRfIds, handleAnalyse]);
 
-  // ── Step selection ─────────────────────────────────────────────────────────
+  // ── Step / RF selection ────────────────────────────────────────────────────
 
   const handleSelectStep = useCallback((stepId: string) => {
     setSelectedStepId(stepId);
     const step = steps.find((s) => s.id === stepId);
-    if (step?.risk_factors.length) setSelectedRfId(step.risk_factors[0].id);
-  }, [steps]);
+    if (!step) return;
+    if (step.risk_factors.length) setSelectedRfId(step.risk_factors[0].id);
+    setMapFocus(getStepFocus(mapType, step.position));
+  }, [steps, mapType]);
+
+  const handleSelectRf = useCallback((rfId: string) => {
+    setSelectedRfId(rfId);
+    for (const step of steps) {
+      if (step.risk_factors.some((rf) => rf.id === rfId)) {
+        setSelectedStepId(step.id);
+        setMapFocus(getStepFocus(mapType, step.position));
+        break;
+      }
+    }
+  }, [steps, mapType]);
 
   // ── Back / reset ──────────────────────────────────────────────────────────
 
@@ -286,12 +397,36 @@ export default function App() {
     setAgentThread(null);
     setTotalTokens(0);
     setDecomposeError(null);
+    setTokenHistory([]);
+    setRiskThreshold(null);
+    setMapFocus(null);
+  }, []);
+
+  const handleViewChange = useCallback((center: [number, number]) => {
+    if (mapType !== 'oil') return;
+    const sectionLocations = OIL_SECTION_LOCATIONS;
+    // Find nearest section to the current map center
+    let nearest: string | null = null;
+    let minDist = Infinity;
+    for (const [id, focus] of Object.entries(sectionLocations)) {
+      const dlat = center[0] - focus.center[0];
+      const dlon = center[1] - focus.center[1];
+      const dist = Math.sqrt(dlat * dlat + dlon * dlon);
+      if (dist < minDist) {
+        minDist = dist;
+        nearest = id;
+      }
+    }
+    // Only highlight if reasonably close (within ~5 degrees)
+    if (minDist < 5) setActiveDocSection(nearest);
+  }, [mapType]);
+
+  const handleSectionFocus = useCallback((sectionId: string, location: MapFocus | null) => {
+    setActiveDocSection(sectionId);
+    if (location) setMapFocus(location);
   }, []);
 
   // ── Derived ────────────────────────────────────────────────────────────────
-
-  const selectedStep = steps.find((s) => s.id === selectedStepId) ?? null;
-  const selectedRf = selectedStep?.risk_factors.find((rf) => rf.id === selectedRfId) ?? null;
 
   // ── Render ─────────────────────────────────────────────────────────────────
 
@@ -323,50 +458,64 @@ export default function App() {
         </>
       ) : (
         <div className="workspace">
-          {/* LHS: risk charts + artifacts */}
-          <LHSPanel
-            selectedStep={selectedStep}
-            selectedRfId={selectedRfId}
-            analysisResults={analysisResults}
-            riskFactorDepths={riskFactorDepths}
-            globalDepth={globalDepth}
-            runningRiskFactorIds={runningRfIds}
-            onSelectRf={setSelectedRfId}
-            onDepthChange={(rfId, d) => setRiskFactorDepths((prev) => ({ ...prev, [rfId]: d }))}
-            onAnalyse={handleAnalyse}
-          />
-
-          {/* CENTER: map + step chain overlay */}
-          <div className="map-area">
-            <MapView mapType={mapType}>
-              <StepChainOverlay
-                steps={steps}
-                analysisResults={analysisResults}
-                selectedStepId={selectedStepId}
-                runningRiskFactorIds={runningRfIds}
-                onSelectStep={handleSelectStep}
+          {/* LEFT: chart + executive report */}
+          <div className="left-col">
+            <div className="left-col__chart">
+              <TokenEfficiencyChart
+                liveCurve={tokenHistory}
+                forecastCurve={forecastCurve}
+                threshold={riskThreshold}
+                onThresholdChange={setRiskThreshold}
               />
-              {isDecomposing && (
-                <div className="decomposing-state">
-                  <div className="loading-dots" style={{ color: 'var(--color-accent)' }}>
-                    <span /><span /><span />
-                  </div>
-                  <span>Mapping business flow…</span>
-                </div>
+            </div>
+            <div className="left-col__report">
+              {docMarkdown ? (
+                <DocumentViewer
+                  markdown={docMarkdown}
+                  activeSectionId={activeDocSection}
+                  sectionLocations={mapType === 'oil' ? OIL_SECTION_LOCATIONS : {}}
+                  onSectionFocus={handleSectionFocus}
+                />
+              ) : (
+                <ExecutiveReport
+                  businessName={businessName}
+                  steps={steps}
+                  analysisResults={analysisResults}
+                  selectedRfId={selectedRfId}
+                  runningRfIds={runningRfIds}
+                  riskFactorDepths={riskFactorDepths}
+                  globalDepth={globalDepth}
+                  onSelectRf={handleSelectRf}
+                  onAnalyse={handleAnalyse}
+                  onDepthChange={(rfId, d) => setRiskFactorDepths((prev) => ({ ...prev, [rfId]: d }))}
+                />
               )}
-            </MapView>
+            </div>
           </div>
 
-          {/* RHS: agent thread + RF detail */}
-          <RHSPanel
-            selectedRf={selectedRf}
-            result={selectedRf ? analysisResults[selectedRf.id] : undefined}
-            isRunning={selectedRf ? runningRfIds.has(selectedRf.id) : false}
-            agentThread={agentThread}
-            depth={selectedRf ? (riskFactorDepths[selectedRf.id] ?? globalDepth) : globalDepth}
-            onDepthChange={(rfId, d) => setRiskFactorDepths((prev) => ({ ...prev, [rfId]: d }))}
-            onAnalyse={(rfId, feedback) => handleAnalyse(rfId, feedback)}
-          />
+          {/* RIGHT: map + debug pane */}
+          <div className="right-col">
+            <div className="map-area">
+              <MapView mapType={mapType} focusLocation={mapFocus} onViewChange={handleViewChange}>
+                <StepChainOverlay
+                  steps={steps}
+                  analysisResults={analysisResults}
+                  selectedStepId={selectedStepId}
+                  runningRiskFactorIds={runningRfIds}
+                  onSelectStep={handleSelectStep}
+                />
+                {isDecomposing && (
+                  <div className="decomposing-state">
+                    <div className="loading-dots" style={{ color: 'var(--color-accent)' }}>
+                      <span /><span /><span />
+                    </div>
+                    <span>Mapping business flow…</span>
+                  </div>
+                )}
+              </MapView>
+            </div>
+            <AgentDebugPane agentThread={agentThread} />
+          </div>
         </div>
       )}
 

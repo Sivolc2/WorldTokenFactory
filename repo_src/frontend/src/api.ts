@@ -115,5 +115,12 @@ export async function fetchYoutubeMeta(
 }
 
 export function getMediaUrl(domain: string, filename: string): string {
-  return `${API_BASE}/api/media/${domain}/${encodeURIComponent(filename)}`;
+  const encodedPath = filename.split('/').map(encodeURIComponent).join('/');
+  return `${API_BASE}/api/media/${domain}/${encodedPath}`;
+}
+
+export async function fetchDocument(domain: string, file: string): Promise<string> {
+  const response = await fetch(`${API_BASE}/api/document?domain=${encodeURIComponent(domain)}&file=${encodeURIComponent(file)}`);
+  if (!response.ok) throw new Error(`HTTP ${response.status}`);
+  return response.text();
 }

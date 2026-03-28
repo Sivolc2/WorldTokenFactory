@@ -4,7 +4,8 @@ from typing import AsyncGenerator
 from repo_src.backend.models.risk import AnalysisResult, Artifact, RiskMetrics
 from repo_src.backend.services.data_source import list_files, read_file
 from repo_src.backend.agents.depth1 import analyse_depth1
-from repo_src.backend.llm_chat.llm_interface import ask_llm
+from repo_src.backend.llm_chat.llm_interface import ask_llm, gemini_client
+from repo_src.backend.services.gemini_multimodal import multimodal_scan, select_multimodal_files
 from repo_src.backend.services.senso_service import senso_search
 
 ANALYSE_SYSTEM = """You are a senior risk analyst. Given a risk factor and supporting documents, produce a structured risk assessment.
@@ -67,6 +68,53 @@ async def analyse_depth2(
             except Exception as e:
                 yield {"event": "signal", "text": f"Could not read {art['filename']}: {e}"}
 
+    # ── Multimodal scan (Gemini-native: video, GeoTIFF, images, PDFs) ─────────
+    multimodal_findings = ""
+    if gemini_client is not None:
+        yield {"event": "step", "text": "Running Gemini multimodal scan (video, imagery, geospatial)"}
+
+        # Collect all visual/geo files from each domain
+        all_domain_files = []
+        available_domains = set()
+        for art in artifacts_from_d1:
+            available_domains.add(art["domain"])
+        for domain in available_domains:
+            all_domain_files.extend(list_files(domain))
+
+        # Files from depth-1 as FileMetadata objects (reconstruct from artifact dicts)
+        from repo_src.backend.services.data_source import FileMetadata, DATA_PATH
+        import os
+        matched_file_meta = [
+            FileMetadata(
+                filename=art["filename"],
+                domain=art["domain"],
+                type=art["type"],
+                path=os.path.join(DATA_PATH, art["domain"], art["filename"]),
+            )
+            for art in artifacts_from_d1
+        ]
+
+        visual_files = select_multimodal_files(
+            all_domain_files=all_domain_files,
+            keyword_matched=matched_file_meta,
+            max_files=6,
+        )
+
+        if visual_files:
+            yield {"event": "signal", "text": f"Multimodal scan: {len(visual_files)} file(s) — {', '.join(f.filename for f in visual_files)}"}
+            try:
+                multimodal_findings = await multimodal_scan(
+                    gemini_client=gemini_client,
+                    files=visual_files,
+                    risk_factor_name=risk_factor_name,
+                    business_context=business_context,
+                )
+                yield {"event": "signal", "text": "Multimodal scan complete — integrating visual/spatial findings"}
+            except Exception as exc:
+                yield {"event": "signal", "text": f"Multimodal scan error (continuing): {exc}"}
+        else:
+            yield {"event": "signal", "text": "No visual/geospatial files found for multimodal scan"}
+
     yield {"event": "step", "text": f"Analysing {len(doc_chunks)} document(s) with LLM"}
 
     # Enrich with Senso RAG context
@@ -96,6 +144,10 @@ async def analyse_depth2(
             for domain, fname, content in doc_chunks
         )
 
+    multimodal_section = (
+        f"\nMultimodal Analysis (video, imagery, geospatial rasters):\n{multimodal_findings}\n"
+        if multimodal_findings else ""
+    )
     feedback_section = (
         f"\nUser feedback on the previous analysis (address these concerns):\n{feedback}\n"
         if feedback else ""
@@ -105,6 +157,7 @@ async def analyse_depth2(
         f"Business Context: {business_context}\n"
         f"Step Context: {step_context}\n"
         f"{feedback_section}"
+        f"{multimodal_section}"
         f"{senso_context}\n"
         f"Source Documents:\n{docs_text}"
     )

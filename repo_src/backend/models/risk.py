@@ -5,6 +5,7 @@ class RiskFactor(BaseModel):
     id: str
     name: str
     description: str
+    initial_metrics: Optional["RiskMetrics"] = None
 
 class RiskMetrics(BaseModel):
     failure_rate: float
@@ -16,7 +17,7 @@ class RiskMetrics(BaseModel):
 class Artifact(BaseModel):
     filename: str
     domain: str
-    type: Literal["document", "image", "youtube", "audio", "data"]
+    type: Literal["document", "image", "youtube", "audio", "video", "data"]
     relevance: str
     url: Optional[str] = None
 

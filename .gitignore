@@ -5,6 +5,7 @@
 
 # --- Large data artifacts (satellite imagery, video, PDFs) ---
 data/oil/artifacts/
+data/oil/sites/
 data/lemming/artifacts/
 
 # --- Python ---
