@@ -194,3 +194,6 @@ data/**/*.mp4
 data/**/*.mkv
 data/**/*.webm
 data/**/*.zip
+
+# autoresearch runtime directory
+repo_src/backend/autoresearch/
