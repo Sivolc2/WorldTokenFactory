@@ -187,3 +187,9 @@ code_builder/.env        # If using a .env file for API keys
 
 docs/prd/last_response.json
 docs/prd/last_request.json
+# Large binary data files (served locally, not in git)
+data/**/*.tif
+data/**/*.mp4
+data/**/*.mkv
+data/**/*.webm
+data/**/*.zip
