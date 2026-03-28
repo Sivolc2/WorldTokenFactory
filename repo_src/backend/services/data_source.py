@@ -6,9 +6,10 @@ _THIS_DIR = os.path.dirname(os.path.abspath(__file__))
 _DEFAULT_DATA_PATH = os.path.normpath(os.path.join(_THIS_DIR, "..", "..", "..", "data"))
 DATA_PATH = os.getenv("DATA_PATH", _DEFAULT_DATA_PATH)
 
-DOCUMENT_EXTS = {".pdf", ".md", ".txt", ".docx"}
+DOCUMENT_EXTS = {".pdf", ".md", ".txt", ".docx", ".tif", ".tiff"}
 IMAGE_EXTS = {".png", ".jpg", ".jpeg", ".gif", ".webp"}
 AUDIO_EXTS = {".mp3", ".wav", ".ogg", ".m4a"}
+VIDEO_EXTS = {".mp4", ".mkv", ".webm", ".mov", ".avi"}
 DATA_EXTS = {".csv", ".json", ".xlsx", ".tsv"}
 
 @dataclass
@@ -23,14 +24,16 @@ def _classify(filename: str) -> str:
     ext = os.path.splitext(filename)[1].lower()
     if ext == ".url":
         return "youtube"
-    if ext in DOCUMENT_EXTS:
-        return "document"
+    if ext in VIDEO_EXTS:
+        return "video"
     if ext in IMAGE_EXTS:
         return "image"
     if ext in AUDIO_EXTS:
         return "audio"
     if ext in DATA_EXTS:
         return "data"
+    if ext in DOCUMENT_EXTS:
+        return "document"
     return "document"
 
 
@@ -48,6 +51,17 @@ def list_files(domain: str) -> list[FileMetadata]:
                 type=_classify(fname),
                 path=full_path,
             ))
+        # Scan one level of subdirectories (e.g. artifacts/)
+        elif os.path.isdir(full_path) and not fname.startswith("."):
+            for subfname in sorted(os.listdir(full_path)):
+                subpath = os.path.join(full_path, subfname)
+                if os.path.isfile(subpath) and not subfname.startswith("."):
+                    results.append(FileMetadata(
+                        filename=f"{fname}/{subfname}",
+                        domain=domain,
+                        type=_classify(subfname),
+                        path=subpath,
+                    ))
     return results
 
 

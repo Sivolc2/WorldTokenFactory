@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef, useMemo } from 'react';
+import { useState, useCallback, useRef, useMemo, useEffect } from 'react';
 import type {
   Step,
   Depth,
@@ -14,8 +14,17 @@ import StepChainOverlay from './components/StepChainOverlay';
 import LHSPanel from './components/LHSPanel';
 import RHSPanel from './components/RHSPanel';
 import ChatPanel from './components/ChatPanel';
+import type { ChartPoint } from './components/TokenEfficiencyChart';
 
 type AppScreen = 'input' | 'main';
+
+/** Sum of (high − low) across all factors, using best available metrics. */
+function portfolioUncertainty(steps: Step[], results: Record<string, AnalysisResult>): number {
+  return steps.flatMap((s) => s.risk_factors).reduce((sum, rf) => {
+    const m = results[rf.id]?.metrics ?? rf.initial_metrics;
+    return sum + (m ? m.loss_range_high - m.loss_range_low : 0);
+  }, 0);
+}
 
 function tokenEstimateNumber(depth: Depth): number {
   switch (depth) {
@@ -48,25 +57,63 @@ export default function App() {
   const [isRunningAll, setIsRunningAll] = useState(false);
   const [showChat, setShowChat] = useState(false);
 
+  const [tokenHistory, setTokenHistory] = useState<ChartPoint[]>([]);
+  const [riskThreshold, setRiskThreshold] = useState<number | null>(null);
+
   const abortControllersRef = useRef<Map<string, AbortController>>(new Map());
+  // Refs so handleAnalyse always sees current values without stale closures
+  const analysisResultsRef = useRef<Record<string, AnalysisResult>>({});
+  const totalTokensRef = useRef(0);
+  useEffect(() => { analysisResultsRef.current = analysisResults; }, [analysisResults]);
+  useEffect(() => { totalTokensRef.current = totalTokens; }, [totalTokens]);
 
   // ── KPIs ───────────────────────────────────────────────────────────────────
 
   const kpis = useMemo((): TopBarKPIs | null => {
-    const results = Object.values(analysisResults);
-    if (results.length === 0) return null;
-    let totalLow = 0, totalHigh = 0, criticalCount = 0;
-    for (const r of results) {
-      totalLow  += r.metrics.loss_range_low;
-      totalHigh += r.metrics.loss_range_high;
-      if (r.metrics.failure_rate > 0.6 || r.metrics.uncertainty > 0.6) criticalCount++;
+    const allRfs = steps.flatMap((s) => s.risk_factors);
+    if (allRfs.length === 0) return null;
+    let totalLow = 0, totalHigh = 0, criticalCount = 0, analyzedCount = 0, hasAny = false;
+    for (const rf of allRfs) {
+      const metrics = analysisResults[rf.id]?.metrics ?? rf.initial_metrics;
+      if (!metrics) continue;
+      hasAny = true;
+      totalLow  += metrics.loss_range_low;
+      totalHigh += metrics.loss_range_high;
+      if (metrics.failure_rate > 0.6 || metrics.uncertainty > 0.6) criticalCount++;
+      if (analysisResults[rf.id]) analyzedCount++;
     }
+    if (!hasAny) return null;
     return {
       totalExposureLow: totalLow, totalExposureHigh: totalHigh,
-      criticalCount, analyzedCount: results.length,
-      totalRiskFactors: steps.reduce((n, s) => n + s.risk_factors.length, 0),
+      criticalCount, analyzedCount,
+      totalRiskFactors: allRfs.length,
     };
   }, [analysisResults, steps]);
+
+  // ── Token efficiency history + forecast ────────────────────────────────────
+
+  // Seed the live curve once steps arrive (uses initial_metrics as baseline)
+  useEffect(() => {
+    if (steps.length === 0 || tokenHistory.length > 0) return;
+    const unc = portfolioUncertainty(steps, {});
+    if (unc > 0) {
+      setTokenHistory([{ tokens: 0, uncertainty: unc }]);
+      setRiskThreshold(unc * 0.3);
+    }
+  }, [steps]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const forecastCurve = useMemo((): ChartPoint[] => {
+    if (tokenHistory.length === 0) return [];
+    const initialUnc = tokenHistory[0].uncertainty;
+    const N = steps.flatMap((s) => s.risk_factors).length;
+    if (N === 0 || initialUnc === 0) return [];
+    return [
+      { tokens: 0,           uncertainty: initialUnc },
+      { tokens: N * 350,     uncertainty: initialUnc * 0.55 },
+      { tokens: N * 3_000,   uncertainty: initialUnc * 0.25 },
+      { tokens: N * 200_000, uncertainty: initialUnc * 0.08 },
+    ];
+  }, [tokenHistory, steps]);
 
   // ── Decompose ──────────────────────────────────────────────────────────────
 
@@ -222,15 +269,20 @@ export default function App() {
             break;
           case 'complete':
             if (event.result) {
+              const newResult = event.result!;
+              const newResults = { ...analysisResultsRef.current, [rfId]: newResult };
+              const newTotal   = totalTokensRef.current + newResult.tokens_used;
+              const newUnc     = portfolioUncertainty(steps, newResults);
+              setTokenHistory((h) => [...h, { tokens: newTotal, uncertainty: newUnc }]);
               updateThread((t) => ({
                 ...t,
                 steps: t.steps.map((s) => ({ ...s, status: 'complete' as const })),
-                tokens_current: event.result!.tokens_used,
+                tokens_current: newResult.tokens_used,
                 is_complete: true,
-                result: event.result,
+                result: newResult,
               }));
-              setAnalysisResults((prev) => ({ ...prev, [rfId]: event.result! }));
-              setTotalTokens((prev) => prev + event.result!.tokens_used);
+              setAnalysisResults(newResults);
+              setTotalTokens(newTotal);
             }
             break;
           case 'error':
@@ -286,6 +338,8 @@ export default function App() {
     setAgentThread(null);
     setTotalTokens(0);
     setDecomposeError(null);
+    setTokenHistory([]);
+    setRiskThreshold(null);
   }, []);
 
   // ── Derived ────────────────────────────────────────────────────────────────
@@ -334,6 +388,10 @@ export default function App() {
             onSelectRf={setSelectedRfId}
             onDepthChange={(rfId, d) => setRiskFactorDepths((prev) => ({ ...prev, [rfId]: d }))}
             onAnalyse={handleAnalyse}
+            tokenHistory={tokenHistory}
+            forecastCurve={forecastCurve}
+            riskThreshold={riskThreshold}
+            onThresholdChange={setRiskThreshold}
           />
 
           {/* CENTER: map + step chain overlay */}

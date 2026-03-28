@@ -65,8 +65,17 @@ export default function RiskBarChart({
   selectedRfId,
   onSelect,
 }: RiskBarChartProps) {
+  // Sort by expected loss at high end: failure_rate × loss_range_high (desc)
+  const scored = [...riskFactors].sort((a, b) => {
+    const ma = analysisResults[a.id]?.metrics ?? a.initial_metrics;
+    const mb = analysisResults[b.id]?.metrics ?? b.initial_metrics;
+    const scoreA = ma ? ma.failure_rate * ma.loss_range_high : -1;
+    const scoreB = mb ? mb.failure_rate * mb.loss_range_high : -1;
+    return scoreB - scoreA;
+  });
+
   // Shared scale: max loss_range_high across all factors with any metrics
-  const maxLoss = riskFactors.reduce((m, rf) => {
+  const maxLoss = scored.reduce((m, rf) => {
     const r = analysisResults[rf.id];
     const hi = r?.metrics.loss_range_high ?? rf.initial_metrics?.loss_range_high ?? 0;
     return Math.max(m, hi);
@@ -74,7 +83,7 @@ export default function RiskBarChart({
 
   return (
     <div className="rbc">
-      {riskFactors.map((rf) => {
+      {scored.map((rf) => {
         const result     = analysisResults[rf.id];
         const isRunning  = runningRiskFactorIds.has(rf.id);
         const isSelected = rf.id === selectedRfId;

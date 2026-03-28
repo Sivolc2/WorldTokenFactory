@@ -59,7 +59,6 @@ if not gemini_client and not gradient_client:
 # Backwards-compatible alias used by older callers that imported `client` directly
 client = openrouter_client
 
-
 async def ask_llm(
     prompt_text: str,
     system_message: str = "You are a helpful assistant.",
@@ -94,7 +93,6 @@ async def ask_llm(
     if gemini_client is not None:
         model_to_use = model_override or GEMINI_DEFAULT_MODEL
         try:
-            from google import genai as _genai
             response = gemini_client.models.generate_content(
                 model=model_to_use,
                 contents=prompt_text,

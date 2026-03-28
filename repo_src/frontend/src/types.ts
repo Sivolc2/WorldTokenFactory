@@ -24,7 +24,7 @@ export interface Step {
   risk_factors: RiskFactor[];
 }
 
-export type ArtifactType = 'document' | 'image' | 'youtube' | 'audio' | 'data';
+export type ArtifactType = 'document' | 'image' | 'youtube' | 'audio' | 'video' | 'data';
 
 export interface Artifact {
   filename: string;
