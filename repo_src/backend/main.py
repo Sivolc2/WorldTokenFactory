@@ -33,6 +33,11 @@ from repo_src.backend.database.setup import init_db
 from repo_src.backend.database import models, connection # For example endpoints
 from repo_src.backend.functions.items import router as items_router # Import the items router
 from repo_src.backend.routers.chat import router as chat_router # Import the chat router
+from repo_src.backend.routers.decompose import router as decompose_router
+from repo_src.backend.routers.analyse import router as analyse_router
+from repo_src.backend.routers.files import router as files_router
+from repo_src.backend.routers.media import router as media_router
+from repo_src.backend.routers.youtube_meta import router as youtube_meta_router
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -51,15 +56,20 @@ app = FastAPI(title="AI-Friendly Repository Backend", version="1.0.0", lifespan=
 # Configure CORS middleware
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173"],  # Frontend origin
-    allow_credentials=True,
-    allow_methods=["*"],  # Allow all methods
-    allow_headers=["*"],  # Allow all headers
+    allow_origins=["*"],
+    allow_credentials=False,
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 # Include routers
 app.include_router(items_router)
 app.include_router(chat_router)
+app.include_router(decompose_router)
+app.include_router(analyse_router)
+app.include_router(files_router)
+app.include_router(media_router)
+app.include_router(youtube_meta_router)
 
 @app.get("/")
 async def read_root():

@@ -1,147 +1,134 @@
-# AI-Friendly Repository Template
+# World Token Factory
 
-A framework for collaborative content creation and management with an AI-driven, functional-core architecture.
+> *Describe your business. We decompose it into risk factors, then let you drill into each one — from a quick scan to a full intelligence brief.*
 
-## 🤖 How to Use This Repository with AI
+Built for the **Multimodal Frontier Hackathon**. World Token Factory treats every business as a **token factory** — taking attention and compute in, producing decisions and outputs. The core question it answers: *how many tokens does it cost to reduce the uncertainty that's putting your business at risk?*
 
-This repository is designed for effective human-AI collaboration. Follow this process:
+---
 
-### Contributing with AI Assistance
-1. **Add documentation first**: Create or update guides in `docs/guides/` to document new features or processes
-2. **Prompt the AI model with**:
-   - `docs/feature_flow.md` - Shows the process for contributing (update as workflows evolve)
-   - Registry context files in `registry/` (backend_context.md, frontend_context.md)
-3. **Use README files** in each folder as guidance for your contributions
-4. **Develop iteratively**: Test features after implementing and check for output
+## What It Does
 
-### Best Practices
-- **Encode business logic in pipelines**: Expand pipeline documentation to capture domain knowledge
-- **Update documentation as you code**: Have your AI assistant update docs as pipelines are implemented
-- **Follow testing patterns**: Use the established testing harness for both frontend and backend
+1. **Describe your business** — free text, or pick a demo example
+2. **Decompose** — AI breaks it into up to 5 business process steps, each with a set of risk factors
+3. **Analyse** — run agents at three depth levels against a corpus of domain documents, maps, videos, and data files
+4. **Inspect** — see precise risk metrics (failure rate, uncertainty, potential loss range) per factor, with the source artifacts that back them up
+5. **Watch the AI think** — a live agent thread panel shows the reasoning chain in real time
 
-## 📋 Overview
+### The Two Demo Cases
 
-This repository is structured as a monorepo with a clean separation between pure functions (functional core) and side effects (adapters/IO). This architecture makes it particularly friendly for AI-assisted development and reasoning.
+| | Description |
+|-|-------------|
+| 🐭 **Lemming Farmers Inc.** | Humorous but structurally complete. Shows the system works on any business — including ones with existential cliff-proximity risk. |
+| 🛢️ **Gulf Coast Oil Operator** | Serious. Every operational step carries real, quantifiable uncertainty. Shows the full depth of the analysis. |
 
-## 🏗️ Project Structure
+---
+
+## Key Concepts
+
+### Token Factory
+
+A business can be modelled as a factory that consumes tokens (attention, compute, research effort) and produces outputs (decisions, products, revenue). Uncertainty is expensive — not knowing something costs you either in bad decisions or in the tokens required to find out. World Token Factory makes that cost visible and lets you choose how much uncertainty to resolve.
+
+### Two Separate Risk Metrics
+
+Most risk tools collapse everything into one number. We don't.
+
+- **Failure Rate** — given what we know, the probability of a bad outcome
+- **Uncertainty** — how much we *don't* know (confidence in the failure rate itself)
+
+A 5% failure rate with 80% uncertainty is very different from a 5% failure rate with 10% uncertainty. The potential loss is always shown as a range — the width of that range is itself informative.
+
+### Three Depth Levels
+
+| Depth | Name | What runs |
+|-------|------|-----------|
+| 1 | Quick Scan | Filename matching only — fast orientation |
+| 2 | Research Brief | Agent reads source files, synthesises findings, identifies gaps |
+| 3 | Deep Run | Parallelized agents, extended reasoning, full corpus — long token run |
+
+---
+
+## Project Structure
 
 ```
-.
-├── repo_src
-│   ├── backend            # Python backend with functional core
-│   │   ├── adapters/      # DB / HTTP side-effect wrappers
-│   │   ├── data/          # immutable schemas/constants
-│   │   ├── functions/     # pure functions
-│   │   ├── pipelines/     # orchestration layers
-│   │   ├── tests/         # unit and integration tests
-│   │   ├── utils/         # generic helpers
-│   │   ├── main.py        # entrypoint
-│   │   └── README_backend.md
-│   ├── frontend           # React/TypeScript frontend
-│   │   ├── src/
-│   │   │   ├── components/  # reusable UI components
-│   │   │   ├── hooks/       # custom React hooks
-│   │   │   ├── pages/       # route-level components
-│   │   │   ├── services/    # API clients and services
-│   │   │   ├── types/       # TypeScript type definitions
-│   │   │   └── utils/       # utility functions
-│   │   └── README_frontend.md
-│   ├── scripts            # developer tooling and utilities
-│   └── shared             # shared types and utilities
-│       └── README_shared.md
-├── docs
-│   ├── adr/             # architecture decision records
-│   ├── diagrams/        # system and component diagrams
-│   ├── pipelines/       # auto-generated pipeline documentation
-│   ├── prd/             # product requirements documents
-│   └── README_*.md      # documentation guides
-├── registry/            # auto-generated documentation and indexes
-└── .github/workflows    # CI/CD configuration
+WorldTokenFactory/
+├── docs/
+│   ├── frontend.md        # Full frontend design spec
+│   ├── backend.md         # Backend API, agents, and placeholder map
+│   └── pitch.md           # Hackathon pitch narrative
+├── repo_src/
+│   ├── frontend/          # React + TypeScript (Vite)
+│   └── backend/           # Python FastAPI
+├── data/
+│   ├── oil/               # Oil industry demo datasets
+│   ├── lemming/           # Lemming farmers demo datasets
+│   ├── geo/               # PNG maps and geospatial overlays
+│   └── shared/            # General risk reference docs
+└── README.md
 ```
 
-## 🚀 Quick Start
+---
+
+## Quick Start
 
 ```bash
-# One-command project setup
-pnpm setup-project       # Install dependencies, create venv, install Python packages, and set up env files
+# Install dependencies and set up environment
+pnpm setup-project
 
-# Or manual step-by-step setup:
-pnpm install              # Frontend dependencies
-python -m venv .venv      # Create Python virtual environment
-source .venv/bin/activate # Activate Python virtual environment
-pip install -r repo_src/backend/requirements.txt
-pnpm setup-env            # Set up environment variables
+# Run both frontend and backend
+pnpm dev
 
-# Run development servers
-pnpm dev                  # Start both frontend and backend servers (using Turborepo)
-pnpm dev:clean            # Reset ports and start dev servers
-pnpm dev:frontend         # Run only frontend
-pnpm dev:backend          # Run only backend
-
-# Individual commands
-pnpm reset                # Kill processes using ports 8000, 5173, and 5174
-pnpm --filter frontend dev      # Start Vite dev server
-uvicorn repo_src.backend.main:app --reload  # Start backend server
-
-# Development workflow
-pnpm lint                # Run linters
-pnpm typecheck           # Run type checking
-pnpm test                # Run tests for both frontend and backend
-pnpm e2e                 # Run end-to-end tests with Playwright
-pnpm ci                  # Run lint, typecheck, and tests (CI pipeline)
-pnpm refresh-docs        # Update documentation and diagrams
+# Or separately
+pnpm dev:frontend   # http://localhost:5173
+pnpm dev:backend    # http://localhost:8000
 ```
 
-## 🧪 Testing
+Data folder defaults to `./data/`. Override with `DATA_PATH` environment variable.
 
-This project uses a comprehensive testing harness that allows running all tests with a single command while keeping each language's tooling isolated:
+---
 
-- **Frontend**: Vitest + React Testing Library
-- **Backend**: pytest + hypothesis
-- **E2E**: Playwright
+## Tech Stack
 
-See [README.testing.md](README.testing.md) for detailed information about the testing setup.
+| Layer | Tech |
+|-------|------|
+| Frontend | React + TypeScript + Vite |
+| Backend | Python + FastAPI |
+| Monorepo | Turborepo + pnpm |
+| AI (current) | Stub agents with placeholder responses |
+| AI (target) | Gemini 1.5 Pro — multimodal, long context |
+| Data (current) | Local `/data/` folder |
+| Data (target) | Google Drive via Drive API |
 
-## 📝 Development Flow
+All integration points are marked with `# Placeholder` comments in the backend code. See [`docs/backend.md`](docs/backend.md) for the full placeholder map.
 
-See [docs/feature_flow.md](docs/feature_flow.md) for the step-by-step process for adding new features.
+---
 
-## 📚 Documentation
+## Sponsor Integrations
 
-Each directory contains a README file with specific guidance for that component.
+| Sponsor | Integration |
+|---------|------------|
+| **Google DeepMind / Gemini** | Core AI engine — multimodal analysis, decomposition, research agents |
+| **Assistant UI** | Chat interface and live agent thread panel |
+| **DigitalOcean** | Backend inference hosting |
 
-### Registry
+---
 
-The [registry](registry/) directory contains auto-generated documentation and indexes that provide AI-friendly context:
+## Documentation
 
-- **backend_context.md**: Concise index of backend functionality
-- **frontend_context.md**: Concise index of frontend components and functions
-- **pipeline_context.md**: Summary of all pipelines in the application
-- **context.json**: Machine-readable metadata for AI tools
+| Doc | Contents |
+|-----|---------|
+| [`docs/frontend.md`](docs/frontend.md) | Full UI design: layout, components, risk metrics display, artifact types, agent thread panel, demo flow |
+| [`docs/backend.md`](docs/backend.md) | API endpoints, agent design, services, data models, placeholder map |
+| [`docs/pitch.md`](docs/pitch.md) | Hackathon pitch narrative, one-liners, business case |
 
-To update the registry:
+---
+
+## Development
 
 ```bash
-pnpm ctx:sync
+pnpm lint         # Lint frontend and backend
+pnpm typecheck    # TypeScript type checking
+pnpm test         # Run all tests
+pnpm e2e          # Playwright end-to-end tests
+pnpm ci           # Full CI pipeline (lint + typecheck + test)
 ```
-
-### Diagrams
-
-The [docs/diagrams](docs/diagrams/) directory contains automatically generated diagrams that visualize:
-
-- **Function Overview**: All functions from the `functions/` directory grouped by module
-- **Pipeline Diagrams**: Individual pipeline functions and their relationships
-
-To generate or update diagrams:
-
-```bash
-pnpm diagrams:generate
-```
-
-## 🔄 CI/CD
-
-The project uses GitHub Actions for continuous integration and deployment.
-
-## 📄 License
-
-ISC
