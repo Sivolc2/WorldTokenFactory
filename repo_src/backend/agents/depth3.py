@@ -1,10 +1,12 @@
 import json
+import os
 import re
 from typing import AsyncGenerator
 from repo_src.backend.models.risk import AnalysisResult, Artifact, RiskMetrics
-from repo_src.backend.services.data_source import list_files, read_file
+from repo_src.backend.services.data_source import list_files, read_file, FileMetadata, DATA_PATH
 from repo_src.backend.agents.depth1 import analyse_depth1
-from repo_src.backend.llm_chat.llm_interface import ask_llm
+from repo_src.backend.llm_chat.llm_interface import ask_llm, gemini_client
+from repo_src.backend.services.gemini_multimodal import multimodal_scan, select_multimodal_files
 
 THREAD_DECOMPOSE_SYSTEM = """You are a risk analyst. Given a risk factor, identify 3-5 sub-threads of analysis.
 Return ONLY a JSON array of strings, e.g.:
@@ -101,6 +103,40 @@ async def analyse_depth3(
         f"=== {d}/{f} ===\n{c}" for d, f, c in doc_chunks
     ) or "(No documents available)"
 
+    # ── Multimodal scan (runs once, findings fed into synthesis) ─────────────
+    multimodal_findings = ""
+    if gemini_client is not None:
+        yield {"event": "step", "text": "Gemini multimodal scan (video, GeoTIFF, imagery)"}
+        available_domains = {art["domain"] for art in artifacts_from_d1}
+        all_domain_files = []
+        for domain in available_domains:
+            all_domain_files.extend(list_files(domain))
+        matched_file_meta = [
+            FileMetadata(
+                filename=art["filename"],
+                domain=art["domain"],
+                type=art["type"],
+                path=os.path.join(DATA_PATH, art["domain"], art["filename"]),
+            )
+            for art in artifacts_from_d1
+        ]
+        visual_files = select_multimodal_files(
+            all_domain_files=all_domain_files,
+            keyword_matched=matched_file_meta,
+            max_files=6,
+        )
+        if visual_files:
+            yield {"event": "signal", "text": f"Multimodal: {len(visual_files)} visual/geo file(s) — {', '.join(f.filename for f in visual_files)}"}
+            try:
+                multimodal_findings = await multimodal_scan(
+                    gemini_client=gemini_client,
+                    files=visual_files,
+                    risk_factor_name=risk_factor_name,
+                    business_context=business_context,
+                )
+            except Exception as exc:
+                yield {"event": "signal", "text": f"Multimodal scan error (continuing): {exc}"}
+
     # Step 3: run each thread
     thread_results = []
     for i, thread_name in enumerate(threads):
@@ -129,11 +165,14 @@ async def analyse_depth3(
 
     # Step 4: synthesise
     yield {"event": "step", "text": "Synthesising thread results into final assessment"}
-    synthesis_input = json.dumps({
+    synthesis_payload: dict = {
         "risk_factor": risk_factor_name,
         "business_context": business_context,
         "thread_findings": thread_results,
-    })
+    }
+    if multimodal_findings:
+        synthesis_payload["multimodal_findings"] = multimodal_findings
+    synthesis_input = json.dumps(synthesis_payload)
     synth_resp = await ask_llm(
         prompt_text=synthesis_input,
         system_message=SYNTHESIS_SYSTEM,

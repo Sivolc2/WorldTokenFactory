@@ -12,84 +12,45 @@ def _m(fr, un, low, high, note="Ballpark estimate — run analysis to refine"):
 
 
 OIL_DECOMPOSITION = {
-    "business_name": "Gulf Coast Oil Operator",
+    "business_name": "Permian Basin — Hormuz Crisis Backstop",
     "steps": [
         {
-            "id": "step_1", "name": "Exploration", "position": 1,
-            "description": "Seismic surveys and prospect identification",
+            "id": "step_1", "name": "Permian Field Operations", "position": 1,
+            "description": "Wellfield production and associated infrastructure in the Permian Basin, Texas",
             "risk_factors": [
-                {"id": "rf_1_1", "name": "Seismic Survey Accuracy",
-                 "description": "Errors in subsurface data leading to dry wells",
-                 "initial_metrics": _m(0.12, 0.72, 2_000_000, 18_000_000, "Dry-well cost based on GOM average well CAPEX")},
-                {"id": "rf_1_2", "name": "Geopolitical Access Risk",
-                 "description": "Political instability restricting exploration licences",
-                 "initial_metrics": _m(0.08, 0.78, 8_000_000, 65_000_000, "Licence forfeit and redeployment costs; wide range due to jurisdiction uncertainty")},
-                {"id": "rf_1_3", "name": "Capital Allocation Risk",
-                 "description": "Over-commitment of capital to low-probability prospects",
-                 "initial_metrics": _m(0.18, 0.65, 12_000_000, 95_000_000, "Portfolio IRR erosion if >2 consecutive dry runs")},
+                {"id": "rf_1_1", "name": "ERCOT Grid Failure Risk",
+                 "description": "Power curtailment to field compressors and pumps during ERCOT stress events",
+                 "initial_metrics": _m(0.22, 0.82, 45_000_000, 380_000_000, "Production curtailment cost at large-operator scale; wide range reflects ERCOT event duration uncertainty")},
+                {"id": "rf_1_2", "name": "Zombie Well Pressure Crisis",
+                 "description": "Wastewater injection causing underground pressure buildup, regulatory shutdowns, and blowout risk",
+                 "initial_metrics": _m(0.18, 0.75, 28_000_000, 250_000_000, "Railroad Commission shutdown orders plus cleanup liability; spatial distribution of zombie wells poorly mapped")},
+                {"id": "rf_1_3", "name": "Waha Gas Pipeline Bottleneck",
+                 "description": "Negative Waha hub prices and Blackcomb pipeline delay forcing associated gas curtailment and oil shut-ins",
+                 "initial_metrics": _m(0.68, 0.55, 35_000_000, 185_000_000, "Already active: 38/51 days negative Waha in 2026; Blackcomb delayed to November — oil curtailment risk if production ramp attempted")},
             ]
         },
         {
-            "id": "step_2", "name": "Extraction", "position": 2,
-            "description": "Offshore drilling and well operations",
+            "id": "step_2", "name": "Midstream Egress", "position": 2,
+            "description": "Pipeline transport from Permian to Gulf Coast and Cushing storage hub",
             "risk_factors": [
-                {"id": "rf_2_1", "name": "Well Blowout Risk",
-                 "description": "Probability and impact of uncontrolled well release",
-                 "initial_metrics": _m(0.07, 0.82, 55_000_000, 520_000_000, "Macondo-calibrated tail; wide range reflects response cost uncertainty")},
-                {"id": "rf_2_2", "name": "Seismic / Geological",
-                 "description": "Fault proximity and seismic activity near well sites",
-                 "initial_metrics": _m(0.14, 0.76, 18_000_000, 140_000_000, "Subsidence and fault-induced casing damage; post-2019 survey gap inflates range")},
-                {"id": "rf_2_3", "name": "Equipment Failure",
-                 "description": "BOP and drilling equipment failure rates",
-                 "initial_metrics": _m(0.22, 0.58, 6_000_000, 45_000_000, "Downtime cost at GOM day rates; BOP repair leads dominate high end")},
-                {"id": "rf_2_4", "name": "Hurricane / Storm Exposure",
-                 "description": "Seasonal storm risk to offshore platforms",
-                 "initial_metrics": _m(0.16, 0.72, 20_000_000, 180_000_000, "Cat 3+ direct hit; insurance deductibles and production loss combined")},
+                {"id": "rf_2_1", "name": "Gulf Coast Pipeline Integrity",
+                 "description": "Corrosion, subsidence, and deferred inspection risk across 847 miles of mainline pipe",
+                 "initial_metrics": _m(0.16, 0.72, 12_000_000, 95_000_000, "ILI anomalies on Segments A/B; 2019 survey gap on eastern corridor inflates uncertainty")},
+                {"id": "rf_2_2", "name": "Cushing Storage Congestion",
+                 "description": "Tank farm capacity constraints at the 94M-barrel Cushing hub during a Hormuz-driven production surge",
+                 "initial_metrics": _m(0.14, 0.68, 18_000_000, 140_000_000, "Contango carry cost plus forced price discount if Cushing approaches operational limits during supply surge")},
             ]
         },
         {
-            "id": "step_3", "name": "Transportation", "position": 3,
-            "description": "Pipeline and tanker logistics across Gulf and Texas",
+            "id": "step_3", "name": "GOM Offshore Buffer", "position": 3,
+            "description": "Supplemental Gulf of Mexico offshore production across 17-platform fleet",
             "risk_factors": [
-                {"id": "rf_3_1", "name": "Pipeline Integrity",
-                 "description": "Corrosion, subsidence, and age-related failure risk",
-                 "initial_metrics": _m(0.16, 0.72, 12_000_000, 95_000_000, "ILI findings on eastern corridor; subsidence survey gap widens range")},
-                {"id": "rf_3_2", "name": "Spill / Leak Risk",
-                 "description": "Environmental and financial exposure from release events",
-                 "initial_metrics": _m(0.10, 0.70, 25_000_000, 210_000_000, "NRD liability + cleanup; onshore vs offshore location drives 8x spread")},
-                {"id": "rf_3_3", "name": "Regulatory Compliance",
-                 "description": "PHMSA and state-level compliance obligations",
-                 "initial_metrics": _m(0.28, 0.55, 3_000_000, 28_000_000, "6 open PHMSA conditions; penalty range per violation history")},
-            ]
-        },
-        {
-            "id": "step_4", "name": "Refining", "position": 4,
-            "description": "Crude processing at Gulf Coast refineries",
-            "risk_factors": [
-                {"id": "rf_4_1", "name": "Fire and Explosion Risk",
-                 "description": "Process safety incidents at refinery units",
-                 "initial_metrics": _m(0.05, 0.82, 35_000_000, 380_000_000, "TX City benchmark for major PSI; probability low but consequence tail very wide")},
-                {"id": "rf_4_2", "name": "Environmental Compliance",
-                 "description": "Emissions, effluent, and EPA permit adherence",
-                 "initial_metrics": _m(0.32, 0.58, 6_000_000, 55_000_000, "Enhanced 2023 monitoring requirements; consent decree risk at high end")},
-                {"id": "rf_4_3", "name": "Throughput Disruption",
-                 "description": "Unplanned shutdowns reducing refining capacity",
-                 "initial_metrics": _m(0.18, 0.62, 10_000_000, 80_000_000, "Margin loss at $8/bbl crack spread during 30-90 day outage window")},
-            ]
-        },
-        {
-            "id": "step_5", "name": "Distribution & Sales", "position": 5,
-            "description": "Fuel delivery and commodity trading",
-            "risk_factors": [
-                {"id": "rf_5_1", "name": "Commodity Price Volatility",
-                 "description": "WTI and Brent price swings affecting margins",
-                 "initial_metrics": _m(0.38, 0.48, 15_000_000, 120_000_000, "Unhedged exposure over 90-day window at ±$15/bbl scenario")},
-                {"id": "rf_5_2", "name": "Storage Capacity Risk",
-                 "description": "Tank farm capacity constraints and overflow risk",
-                 "initial_metrics": _m(0.08, 0.68, 4_000_000, 35_000_000, "Contango carry cost + spot premium at capacity ceiling")},
-                {"id": "rf_5_3", "name": "Counterparty Risk",
-                 "description": "Credit exposure from trading counterparties",
-                 "initial_metrics": _m(0.10, 0.62, 6_000_000, 50_000_000, "Mark-to-market exposure; concentrated counterparty book inflates tail")},
+                {"id": "rf_3_1", "name": "Hurricane Platform Exposure",
+                 "description": "Seasonal storm damage to aging offshore platforms and FPSOs in the GOM",
+                 "initial_metrics": _m(0.16, 0.72, 20_000_000, 180_000_000, "Cat 3+ direct hit scenario; 3 high-risk platforms exceed original design envelope under 2050 storm projections")},
+                {"id": "rf_3_2", "name": "Coastal Subsidence Risk",
+                 "description": "Land subsidence stress on Gulf Coast pipeline crossings and offshore approach segments",
+                 "initial_metrics": _m(0.14, 0.76, 4_200_000, 67_000_000, "Eastern offshore approach survey 4 years out of date; 2.4–4.8 inches unaccounted cumulative movement")},
             ]
         },
     ]
@@ -253,7 +214,7 @@ async def decompose(description: str, max_steps: int = 5) -> DecomposeResponse:
 
     if "lemming" in desc_lower:
         raw = LEMMING_DECOMPOSITION
-    elif "oil" in desc_lower or "gulf" in desc_lower or "pipeline" in desc_lower:
+    elif any(k in desc_lower for k in ("oil", "gulf", "pipeline", "permian", "hormuz", "rig")):
         raw = OIL_DECOMPOSITION
     else:
         response_text = await ask_llm(
