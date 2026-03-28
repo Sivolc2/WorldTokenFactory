@@ -1,5 +1,4 @@
 import type { Step, AnalysisResult, Depth } from '../types';
-import { getDepthLabel } from '../utils/risk';
 import { formatPct } from '../utils/formatting';
 
 interface RiskFactorListProps {
@@ -58,7 +57,7 @@ export default function RiskFactorList({
                 <div className="rf-item__metrics">Running…</div>
               ) : null}
             </div>
-            <div className="rf-item__depth">{getDepthLabel(depth)[0]}{depth}</div>
+            <div className="rf-item__depth">D{depth}</div>
           </div>
         );
       })}

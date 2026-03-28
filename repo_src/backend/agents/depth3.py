@@ -61,14 +61,19 @@ async def analyse_depth3(
         else:
             yield event
 
+    total_tokens = 0
+
     # Step 2: decompose into sub-threads
     yield {"event": "step", "text": "Decomposing risk factor into analysis sub-threads"}
+    decompose_prompt = f"Risk factor: {risk_factor_name}\nBusiness context: {business_context}"
     threads_response = await ask_llm(
-        prompt_text=f"Risk factor: {risk_factor_name}\nBusiness context: {business_context}",
+        prompt_text=decompose_prompt,
         system_message=THREAD_DECOMPOSE_SYSTEM,
         max_tokens=300,
         temperature=0.3,
     )
+    total_tokens += (len(decompose_prompt) + len(THREAD_DECOMPOSE_SYSTEM) + len(threads_response)) // 4
+    yield {"event": "token_update", "tokens": total_tokens}
     try:
         threads = _parse_json(threads_response)
         if not isinstance(threads, list):
@@ -96,7 +101,6 @@ async def analyse_depth3(
 
     # Step 3: run each thread
     thread_results = []
-    total_tokens = 300
     for i, thread_name in enumerate(threads):
         yield {"event": "step", "text": f"[Thread {i+1}/{len(threads)}] Analysing: {thread_name}"}
         thread_prompt = (
@@ -116,7 +120,8 @@ async def analyse_depth3(
         except Exception:
             parsed = {"thread_name": thread_name, "findings": resp[:300], "gaps": [], "confidence": 0.5}
         thread_results.append(parsed)
-        total_tokens += (len(thread_prompt) + len(resp)) // 4
+        total_tokens += (len(THREAD_ANALYSE_SYSTEM) + len(thread_prompt) + len(resp)) // 4
+        yield {"event": "token_update", "tokens": total_tokens}
         for gap in parsed.get("gaps", []):
             yield {"event": "signal", "text": f"[{thread_name}] {gap}"}
 
@@ -133,7 +138,8 @@ async def analyse_depth3(
         max_tokens=1000,
         temperature=0.2,
     )
-    total_tokens += (len(synthesis_input) + len(synth_resp)) // 4
+    total_tokens += (len(SYNTHESIS_SYSTEM) + len(synthesis_input) + len(synth_resp)) // 4
+    yield {"event": "token_update", "tokens": total_tokens}
 
     try:
         synth = _parse_json(synth_resp)

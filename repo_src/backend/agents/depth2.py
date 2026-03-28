@@ -82,6 +82,10 @@ async def analyse_depth2(
         f"Source Documents:\n{docs_text}"
     )
 
+    # Emit token estimate before LLM call (prompt tokens ~ chars/4)
+    prompt_token_estimate = (len(prompt) + len(ANALYSE_SYSTEM)) // 4
+    yield {"event": "token_update", "tokens": prompt_token_estimate}
+
     yield {"event": "step", "text": "Generating risk assessment brief"}
 
     response_text = await ask_llm(
@@ -115,6 +119,10 @@ async def analyse_depth2(
     # Emit signals from gaps
     for gap in parsed.get("gaps", []):
         yield {"event": "signal", "text": gap}
+
+    # Emit updated token count after LLM response received
+    total_token_estimate = (len(prompt) + len(ANALYSE_SYSTEM) + len(response_text)) // 4
+    yield {"event": "token_update", "tokens": total_token_estimate}
 
     yield {"event": "step", "text": "Finalising result"}
 

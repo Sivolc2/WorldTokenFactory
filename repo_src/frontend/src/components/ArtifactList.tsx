@@ -8,6 +8,7 @@ interface ArtifactListProps {
 }
 
 function DocumentArtifact({ artifact }: { artifact: Artifact }) {
+  const src = getMediaUrl(artifact.domain, artifact.filename);
   return (
     <div className="artifact-item">
       <div className="artifact-item__main">
@@ -19,6 +20,9 @@ function DocumentArtifact({ artifact }: { artifact: Artifact }) {
             <div className="artifact-item__relevance">{artifact.relevance}</div>
           )}
         </div>
+        <a className="artifact-item__toggle" href={src} target="_blank" rel="noopener noreferrer">
+          Open ↗
+        </a>
       </div>
     </div>
   );
@@ -45,7 +49,14 @@ function ImageArtifact({ artifact }: { artifact: Artifact }) {
       </div>
       {expanded && (
         <div className="artifact-item__preview">
-          <img src={src} alt={artifact.filename} loading="lazy" />
+          <a href={src} target="_blank" rel="noopener noreferrer">
+            <img src={src} alt={artifact.filename} loading="lazy" style={{ cursor: 'zoom-in' }} />
+          </a>
+          <div style={{ marginTop: 4, textAlign: 'right' }}>
+            <a href={src} target="_blank" rel="noopener noreferrer" className="artifact-item__toggle">
+              Open full size ↗
+            </a>
+          </div>
         </div>
       )}
     </div>
@@ -68,11 +79,13 @@ function YouTubeArtifact({ artifact }: { artifact: Artifact }) {
   return (
     <div className="artifact-item">
       <div className="artifact-yt">
-        {thumbnailUrl ? (
-          <img className="artifact-yt__thumb" src={thumbnailUrl} alt="YouTube thumbnail" />
-        ) : (
-          <div className="artifact-yt__thumb" />
-        )}
+        <a href={url || undefined} target="_blank" rel="noopener noreferrer" style={{ display: 'block', flexShrink: 0 }}>
+          {thumbnailUrl ? (
+            <img className="artifact-yt__thumb" src={thumbnailUrl} alt="YouTube thumbnail" style={{ cursor: 'pointer' }} />
+          ) : (
+            <div className="artifact-yt__thumb" />
+          )}
+        </a>
         <div className="artifact-yt__info">
           <span className="artifact-item__icon" style={{ fontSize: 16 }}>🎥</span>
           <div className="artifact-yt__title">
@@ -116,6 +129,7 @@ function AudioArtifact({ artifact }: { artifact: Artifact }) {
 }
 
 function DataArtifact({ artifact }: { artifact: Artifact }) {
+  const src = getMediaUrl(artifact.domain, artifact.filename);
   return (
     <div className="artifact-item">
       <div className="artifact-item__main">
@@ -127,6 +141,9 @@ function DataArtifact({ artifact }: { artifact: Artifact }) {
             <div className="artifact-item__relevance">{artifact.relevance}</div>
           )}
         </div>
+        <a className="artifact-item__toggle" href={src} download={artifact.filename} rel="noopener noreferrer">
+          Download ↓
+        </a>
       </div>
     </div>
   );

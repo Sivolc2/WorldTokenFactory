@@ -3,6 +3,10 @@
 .env
 .env.*
 
+# --- Large data artifacts (satellite imagery, video, PDFs) ---
+data/oil/artifacts/
+data/lemming/artifacts/
+
 # --- Python ---
 __pycache__/
 *.py[cod]

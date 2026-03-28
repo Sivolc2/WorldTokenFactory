@@ -1,18 +1,18 @@
-import { useState, useCallback, useRef } from 'react';
+import { useState, useCallback, useRef, useMemo } from 'react';
 import type {
   Step,
   Depth,
   AnalysisResult,
   AgentThreadState,
+  AgentThreadStep,
 } from './types';
-import type { AgentThreadStep } from './types';
 import { streamDecompose, streamAnalyse } from './api';
-import TopBar from './components/TopBar';
+import TopBar, { type TopBarKPIs } from './components/TopBar';
 import BusinessInput from './components/BusinessInput';
-import BusinessFlowChart from './components/BusinessFlowChart';
-import RiskFactorList from './components/RiskFactorList';
-import RiskFactorDetail from './components/RiskFactorDetail';
-import AgentThreadPanel from './components/AgentThreadPanel';
+import MapView, { detectMapType, type BusinessMapType } from './components/MapView';
+import StepChainOverlay from './components/StepChainOverlay';
+import LHSPanel from './components/LHSPanel';
+import RHSPanel from './components/RHSPanel';
 
 type AppScreen = 'input' | 'main';
 
@@ -28,6 +28,7 @@ export default function App() {
   const [screen, setScreen] = useState<AppScreen>('input');
   const [businessDescription, setBusinessDescription] = useState('');
   const [businessName, setBusinessName] = useState('');
+  const [mapType, setMapType] = useState<BusinessMapType>('general');
   const [steps, setSteps] = useState<Step[]>([]);
   const [isDecomposing, setIsDecomposing] = useState(false);
   const [decomposeError, setDecomposeError] = useState<string | null>(null);
@@ -36,43 +37,62 @@ export default function App() {
   const [totalTokens, setTotalTokens] = useState(0);
 
   const [selectedStepId, setSelectedStepId] = useState<string | null>(null);
-  const [selectedRiskFactorId, setSelectedRiskFactorId] = useState<string | null>(null);
+  const [selectedRfId, setSelectedRfId] = useState<string | null>(null);
 
   const [analysisResults, setAnalysisResults] = useState<Record<string, AnalysisResult>>({});
   const [riskFactorDepths, setRiskFactorDepths] = useState<Record<string, Depth>>({});
-  const [runningRiskFactorIds, setRunningRiskFactorIds] = useState<Set<string>>(new Set());
+  const [runningRfIds, setRunningRfIds] = useState<Set<string>>(new Set());
 
   const [agentThread, setAgentThread] = useState<AgentThreadState | null>(null);
-  const [isThreadOpen, setIsThreadOpen] = useState(false);
   const [isRunningAll, setIsRunningAll] = useState(false);
 
-  // Track abort controllers for running analyses
   const abortControllersRef = useRef<Map<string, AbortController>>(new Map());
+
+  // ── KPIs ───────────────────────────────────────────────────────────────────
+
+  const kpis = useMemo((): TopBarKPIs | null => {
+    const results = Object.values(analysisResults);
+    if (results.length === 0) return null;
+    let totalLow = 0, totalHigh = 0, criticalCount = 0;
+    for (const r of results) {
+      totalLow  += r.metrics.loss_range_low;
+      totalHigh += r.metrics.loss_range_high;
+      if (r.metrics.failure_rate > 0.6 || r.metrics.uncertainty > 0.6) criticalCount++;
+    }
+    return {
+      totalExposureLow: totalLow, totalExposureHigh: totalHigh,
+      criticalCount, analyzedCount: results.length,
+      totalRiskFactors: steps.reduce((n, s) => n + s.risk_factors.length, 0),
+    };
+  }, [analysisResults, steps]);
 
   // ── Decompose ──────────────────────────────────────────────────────────────
 
   const handleSubmit = useCallback(async (description: string) => {
     setBusinessDescription(description);
+    setMapType(detectMapType(description));
     setIsDecomposing(true);
     setDecomposeError(null);
     setSteps([]);
     setBusinessName('');
     setSelectedStepId(null);
-    setSelectedRiskFactorId(null);
+    setSelectedRfId(null);
     setAnalysisResults({});
     setRiskFactorDepths({});
     setTotalTokens(0);
+    setAgentThread(null);
 
     try {
       for await (const event of streamDecompose(description)) {
         if (event.type === 'step') {
           setSteps((prev) => {
-            // avoid duplicates
             if (prev.find((s) => s.id === event.step.id)) return prev;
             return [...prev, event.step];
           });
-          // Auto-select first step
           setSelectedStepId((prev) => prev ?? event.step.id);
+          if (event.step.risk_factors?.length) {
+            setSelectedRfId((prev) => prev ?? event.step.risk_factors[0].id);
+          }
         } else if (event.type === 'meta') {
           setBusinessName(event.business_name);
           setTotalTokens((prev) => prev + event.tokens_used);
@@ -86,224 +106,170 @@ export default function App() {
     }
   }, []);
 
-  // ── Analyse a single risk factor ───────────────────────────────────────────
+  // ── Analyse ────────────────────────────────────────────────────────────────
 
-  const handleAnalyse = useCallback(
-    async (rfId: string) => {
-      // Find the step and risk factor
-      let rf = null;
-      let step = null;
-      for (const s of steps) {
-        const found = s.risk_factors.find((r) => r.id === rfId);
-        if (found) {
-          rf = found;
-          step = s;
-          break;
-        }
-      }
-      if (!rf || !step) return;
+  const handleAnalyse = useCallback(async (rfId: string) => {
+    let rf = null, step = null;
+    for (const s of steps) {
+      const found = s.risk_factors.find((r) => r.id === rfId);
+      if (found) { rf = found; step = s; break; }
+    }
+    if (!rf || !step) return;
 
-      const depth = riskFactorDepths[rfId] ?? globalDepth;
+    const depth = riskFactorDepths[rfId] ?? globalDepth;
 
-      // Abort any existing run for this rf
-      abortControllersRef.current.get(rfId)?.abort();
-      const ac = new AbortController();
-      abortControllersRef.current.set(rfId, ac);
+    abortControllersRef.current.get(rfId)?.abort();
+    const ac = new AbortController();
+    abortControllersRef.current.set(rfId, ac);
 
-      // Initialise thread state
-      const initialSteps: AgentThreadStep[] = [
-        { id: 'init', status: 'pending', text: 'Received risk factor', sub_items: [] },
-        { id: 'scan', status: 'pending', text: `Scanning data sources`, sub_items: [] },
-        { id: 'extract', status: 'pending', text: 'Extracting risk signals', sub_items: [] },
-        { id: 'estimate', status: 'pending', text: 'Estimating failure probability', sub_items: [] },
-        { id: 'uncertainty', status: 'pending', text: 'Identifying uncertainty sources', sub_items: [] },
-        { id: 'loss', status: 'pending', text: 'Generating loss range', sub_items: [] },
-      ];
+    const initialSteps: AgentThreadStep[] =
+      depth === 3
+        ? [
+            { id: 'Thread A',   status: 'pending', text: 'Historical incident data',             sub_items: [] },
+            { id: 'Thread B',   status: 'pending', text: 'Regulatory filing scan',               sub_items: [] },
+            { id: 'Thread C',   status: 'pending', text: 'Geospatial / environmental analysis',  sub_items: [] },
+            { id: 'Thread D',   status: 'pending', text: 'Financial loss modelling',              sub_items: [] },
+            { id: 'Synthesis',  status: 'pending', text: 'Synthesis across threads',             sub_items: [] },
+          ]
+        : [
+            { id: 'init',       status: 'pending', text: 'Received risk factor',                 sub_items: [] },
+            { id: 'scan',       status: 'pending', text: 'Scanning data sources',                sub_items: [] },
+            { id: 'extract',    status: 'pending', text: 'Extracting risk signals',              sub_items: [] },
+            { id: 'estimate',   status: 'pending', text: 'Estimating failure probability',       sub_items: [] },
+            { id: 'uncertainty',status: 'pending', text: 'Identifying uncertainty sources',      sub_items: [] },
+            { id: 'loss',       status: 'pending', text: 'Generating loss range',                sub_items: [] },
+          ];
 
-      if (depth === 3) {
-        initialSteps.length = 0;
-        initialSteps.push(
-          { id: 'Thread A', status: 'pending', text: 'Historical incident data', sub_items: [] },
-          { id: 'Thread B', status: 'pending', text: 'Regulatory filing scan', sub_items: [] },
-          { id: 'Thread C', status: 'pending', text: 'Geospatial / environmental analysis', sub_items: [] },
-          { id: 'Thread D', status: 'pending', text: 'Financial loss modelling', sub_items: [] },
-          { id: 'Synthesis', status: 'pending', text: 'Synthesis across threads', sub_items: [] },
-        );
-      }
+    const threadState: AgentThreadState = {
+      risk_factor_id: rfId,
+      risk_factor_name: rf.name,
+      depth,
+      steps: initialSteps,
+      tokens_current: 0,
+      tokens_estimated: tokenEstimateNumber(depth),
+      is_complete: false,
+      is_error: false,
+    };
 
-      const threadState: AgentThreadState = {
+    setAgentThread(threadState);
+    setSelectedRfId(rfId);
+    setRunningRfIds((prev) => { const n = new Set(prev); n.add(rfId); return n; });
+    setAnalysisResults((prev) => { const n = { ...prev }; delete n[rfId]; return n; });
+
+    let stepIndex = 0;
+
+    const updateThread = (updater: (t: AgentThreadState) => AgentThreadState) => {
+      setAgentThread((prev) => {
+        if (!prev || prev.risk_factor_id !== rfId) return prev;
+        return updater(prev);
+      });
+    };
+
+    const advanceStep = () => {
+      updateThread((t) => ({
+        ...t,
+        steps: t.steps.map((s, i) => {
+          if (i < stepIndex)  return { ...s, status: 'complete' as const };
+          if (i === stepIndex) return { ...s, status: 'running'  as const };
+          return s;
+        }),
+      }));
+      stepIndex++;
+    };
+
+    advanceStep();
+
+    try {
+      for await (const event of streamAnalyse({
         risk_factor_id: rfId,
         risk_factor_name: rf.name,
+        business_context: businessDescription,
+        step_context: `${step.name} — ${step.description}`,
         depth,
-        steps: initialSteps,
-        tokens_current: 0,
-        tokens_estimated: tokenEstimateNumber(depth),
-        is_complete: false,
-        is_error: false,
-      };
-
-      setAgentThread(threadState);
-      setIsThreadOpen(true);
-
-      setRunningRiskFactorIds((prev) => {
-        const next = new Set(prev);
-        next.add(rfId);
-        return next;
-      });
-
-      // Remove existing result so the UI shows the running state
-      setAnalysisResults((prev) => {
-        const next = { ...prev };
-        delete next[rfId];
-        return next;
-      });
-
-      let stepIndex = 0;
-
-      const updateThread = (updater: (t: AgentThreadState) => AgentThreadState) => {
-        setAgentThread((prev) => {
-          if (!prev || prev.risk_factor_id !== rfId) return prev;
-          return updater(prev);
-        });
-      };
-
-      const advanceStep = () => {
-        updateThread((t) => {
-          const steps = t.steps.map((s, i) => {
-            if (i < stepIndex) return { ...s, status: 'complete' as const };
-            if (i === stepIndex) return { ...s, status: 'running' as const };
-            return s;
-          });
-          return { ...t, steps };
-        });
-        stepIndex++;
-      };
-
-      // Mark the first step running immediately
-      advanceStep();
-
-      try {
-        const params = {
-          risk_factor_id: rfId,
-          risk_factor_name: rf.name,
-          business_context: businessDescription,
-          step_context: `${step.name} — ${step.description}`,
-          depth,
-          data_domains: ['oil', 'lemming', 'geo', 'shared'],
-        };
-
-        for await (const event of streamAnalyse(params)) {
-          if (ac.signal.aborted) break;
-
-          switch (event.event) {
-            case 'step':
-              advanceStep();
-              break;
-
-            case 'file_found':
-              updateThread((t) => {
-                const steps = t.steps.map((s, i) => {
-                  if (i !== stepIndex - 1) return s;
-                  const fileLabel = event.domain
-                    ? `📄 ${event.filename} (/${event.domain}/)`
-                    : `📄 ${event.filename}`;
-                  return { ...s, sub_items: [...s.sub_items, fileLabel] };
-                });
-                return { ...t, steps };
-              });
-              break;
-
-            case 'signal':
-              updateThread((t) => {
-                const steps = t.steps.map((s, i) => {
-                  if (i !== stepIndex - 1) return s;
-                  return { ...s, sub_items: [...s.sub_items, event.text ?? ''] };
-                });
-                return { ...t, steps };
-              });
-              break;
-
-            case 'token_update':
-              if (event.tokens !== undefined) {
-                updateThread((t) => ({ ...t, tokens_current: event.tokens! }));
-              }
-              break;
-
-            case 'complete':
-              if (event.result) {
-                // Mark all steps complete
-                updateThread((t) => ({
-                  ...t,
-                  steps: t.steps.map((s) => ({ ...s, status: 'complete' as const })),
-                  tokens_current: event.result!.tokens_used,
-                  is_complete: true,
-                  result: event.result,
-                }));
-
-                setAnalysisResults((prev) => ({
-                  ...prev,
-                  [rfId]: event.result!,
-                }));
-                setTotalTokens((prev) => prev + event.result!.tokens_used);
-              }
-              break;
-
-            case 'error':
-              updateThread((t) => ({ ...t, is_error: true, is_complete: true }));
-              break;
-          }
+        data_domains: ['oil', 'lemming', 'geo', 'shared'],
+      })) {
+        if (ac.signal.aborted) break;
+        switch (event.event) {
+          case 'step':
+            advanceStep();
+            break;
+          case 'file_found':
+            updateThread((t) => ({
+              ...t,
+              steps: t.steps.map((s, i) => {
+                if (i !== stepIndex - 1) return s;
+                const label = event.domain ? `📄 ${event.filename} (/${event.domain}/)` : `📄 ${event.filename}`;
+                return { ...s, sub_items: [...s.sub_items, label] };
+              }),
+            }));
+            break;
+          case 'signal':
+            updateThread((t) => ({
+              ...t,
+              steps: t.steps.map((s, i) => {
+                if (i !== stepIndex - 1) return s;
+                return { ...s, sub_items: [...s.sub_items, event.text ?? ''] };
+              }),
+            }));
+            break;
+          case 'token_update':
+            if (event.tokens !== undefined) {
+              updateThread((t) => ({ ...t, tokens_current: event.tokens! }));
+            }
+            break;
+          case 'complete':
+            if (event.result) {
+              updateThread((t) => ({
+                ...t,
+                steps: t.steps.map((s) => ({ ...s, status: 'complete' as const })),
+                tokens_current: event.result!.tokens_used,
+                is_complete: true,
+                result: event.result,
+              }));
+              setAnalysisResults((prev) => ({ ...prev, [rfId]: event.result! }));
+              setTotalTokens((prev) => prev + event.result!.tokens_used);
+            }
+            break;
+          case 'error':
+            updateThread((t) => ({ ...t, is_error: true, is_complete: true }));
+            break;
         }
-      } catch (err) {
-        if (!ac.signal.aborted) {
-          updateThread((t) => ({ ...t, is_error: true, is_complete: true }));
-          console.error('Analysis error:', err);
-        }
-      } finally {
-        setRunningRiskFactorIds((prev) => {
-          const next = new Set(prev);
-          next.delete(rfId);
-          return next;
-        });
-        abortControllersRef.current.delete(rfId);
-        setIsRunningAll(false);
       }
-    },
-    [steps, riskFactorDepths, globalDepth, businessDescription]
-  );
+    } catch (err) {
+      if (!ac.signal.aborted) {
+        updateThread((t) => ({ ...t, is_error: true, is_complete: true }));
+        console.error('Analysis error:', err);
+      }
+    } finally {
+      setRunningRfIds((prev) => { const n = new Set(prev); n.delete(rfId); return n; });
+      abortControllersRef.current.delete(rfId);
+    }
+  }, [steps, riskFactorDepths, globalDepth, businessDescription]);
 
-  // ── Run all risk factors ───────────────────────────────────────────────────
+  // ── Run all ────────────────────────────────────────────────────────────────
 
   const handleRunAll = useCallback(async () => {
     if (isRunningAll) return;
     setIsRunningAll(true);
-
-    const allRFs = steps.flatMap((s) => s.risk_factors);
-    const unanalyzed = allRFs.filter(
-      (rf) => !analysisResults[rf.id] && !runningRiskFactorIds.has(rf.id)
-    );
-
-    for (const rf of unanalyzed) {
-      await handleAnalyse(rf.id);
-    }
-
+    const unanalyzed = steps
+      .flatMap((s) => s.risk_factors)
+      .filter((rf) => !analysisResults[rf.id] && !runningRfIds.has(rf.id));
+    for (const rf of unanalyzed) await handleAnalyse(rf.id);
     setIsRunningAll(false);
-  }, [isRunningAll, steps, analysisResults, runningRiskFactorIds, handleAnalyse]);
+  }, [isRunningAll, steps, analysisResults, runningRfIds, handleAnalyse]);
 
   // ── Step selection ─────────────────────────────────────────────────────────
 
   const handleSelectStep = useCallback((stepId: string) => {
     setSelectedStepId(stepId);
     const step = steps.find((s) => s.id === stepId);
-    if (step?.risk_factors.length) {
-      setSelectedRiskFactorId(step.risk_factors[0].id);
-    }
+    if (step?.risk_factors.length) setSelectedRfId(step.risk_factors[0].id);
   }, [steps]);
 
-  // ── Derived state ──────────────────────────────────────────────────────────
+  // ── Derived ────────────────────────────────────────────────────────────────
 
   const selectedStep = steps.find((s) => s.id === selectedStepId) ?? null;
-  const selectedRiskFactor =
-    selectedStep?.risk_factors.find((rf) => rf.id === selectedRiskFactorId) ?? null;
+  const selectedRf = selectedStep?.risk_factors.find((rf) => rf.id === selectedRfId) ?? null;
 
   // ── Render ─────────────────────────────────────────────────────────────────
 
@@ -312,6 +278,7 @@ export default function App() {
       <TopBar
         businessName={businessName}
         totalTokens={totalTokens}
+        kpis={kpis}
         onRunAll={handleRunAll}
         isRunningAll={isRunningAll}
         hasSteps={steps.length > 0}
@@ -332,73 +299,53 @@ export default function App() {
           )}
         </>
       ) : (
-        <div className="main-view">
-          <div className="main-view__body">
-            {/* Flow chart */}
-            {steps.length > 0 ? (
-              <BusinessFlowChart
+        <div className="workspace">
+          {/* LHS: risk charts + artifacts */}
+          <LHSPanel
+            selectedStep={selectedStep}
+            selectedRfId={selectedRfId}
+            analysisResults={analysisResults}
+            riskFactorDepths={riskFactorDepths}
+            globalDepth={globalDepth}
+            runningRiskFactorIds={runningRfIds}
+            onSelectRf={setSelectedRfId}
+            onDepthChange={(rfId, d) => setRiskFactorDepths((prev) => ({ ...prev, [rfId]: d }))}
+            onAnalyse={handleAnalyse}
+          />
+
+          {/* CENTER: map + step chain overlay */}
+          <div className="map-area">
+            <MapView mapType={mapType}>
+              <StepChainOverlay
                 steps={steps}
                 analysisResults={analysisResults}
                 selectedStepId={selectedStepId}
-                runningRiskFactorIds={runningRiskFactorIds}
+                runningRiskFactorIds={runningRfIds}
                 onSelectStep={handleSelectStep}
               />
-            ) : (
-              <div className="decomposing-state">
-                <div className="loading-dots" style={{ color: 'var(--color-accent)' }}>
-                  <span /><span /><span />
-                </div>
-                <span>Mapping business flow…</span>
-              </div>
-            )}
-
-            {/* Detail area */}
-            <div className="detail-area">
-              {selectedStep && selectedRiskFactor ? (
-                <>
-                  <RiskFactorList
-                    step={selectedStep}
-                    analysisResults={analysisResults}
-                    riskFactorDepths={riskFactorDepths}
-                    globalDepth={globalDepth}
-                    runningRiskFactorIds={runningRiskFactorIds}
-                    selectedRiskFactorId={selectedRiskFactorId}
-                    onSelectRiskFactor={setSelectedRiskFactorId}
-                  />
-                  <RiskFactorDetail
-                    riskFactor={selectedRiskFactor}
-                    result={analysisResults[selectedRiskFactor.id]}
-                    isRunning={runningRiskFactorIds.has(selectedRiskFactor.id)}
-                    agentThread={agentThread}
-                    depth={riskFactorDepths[selectedRiskFactor.id] ?? globalDepth}
-                    onDepthChange={(rfId, d) =>
-                      setRiskFactorDepths((prev) => ({ ...prev, [rfId]: d }))
-                    }
-                    onAnalyse={handleAnalyse}
-                    onOpenThread={() => setIsThreadOpen(true)}
-                  />
-                </>
-              ) : (
-                <div className="detail-empty">
-                  Click a step to explore its risk factors
+              {isDecomposing && (
+                <div className="decomposing-state">
+                  <div className="loading-dots" style={{ color: 'var(--color-accent)' }}>
+                    <span /><span /><span />
+                  </div>
+                  <span>Mapping business flow…</span>
                 </div>
               )}
-            </div>
+            </MapView>
           </div>
+
+          {/* RHS: agent thread + RF detail */}
+          <RHSPanel
+            selectedRf={selectedRf}
+            result={selectedRf ? analysisResults[selectedRf.id] : undefined}
+            isRunning={selectedRf ? runningRfIds.has(selectedRf.id) : false}
+            agentThread={agentThread}
+            depth={selectedRf ? (riskFactorDepths[selectedRf.id] ?? globalDepth) : globalDepth}
+            onDepthChange={(rfId, d) => setRiskFactorDepths((prev) => ({ ...prev, [rfId]: d }))}
+            onAnalyse={handleAnalyse}
+          />
         </div>
       )}
-
-      {/* Agent thread side panel */}
-      <AgentThreadPanel
-        thread={agentThread}
-        isOpen={isThreadOpen}
-        onClose={() => setIsThreadOpen(false)}
-        onStop={() => {
-          if (agentThread) {
-            abortControllersRef.current.get(agentThread.risk_factor_id)?.abort();
-          }
-        }}
-      />
     </>
   );
 }
