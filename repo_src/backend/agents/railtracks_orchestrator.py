@@ -416,6 +416,7 @@ async def run_railtracks_analysis(
 ) -> dict:
     """
     Run a Railtracks-orchestrated risk analysis for a single risk factor.
+    Uses a generate → validate → revise loop (max 3 iterations).
     Returns a dict compatible with the existing AnalysisResult schema.
     """
     if not RAILTRACKS_AVAILABLE:
@@ -425,6 +426,22 @@ async def run_railtracks_analysis(
     if not agent:
         return {"error": "No LLM configured for Railtracks", "available": False}
 
+    # Create a validator agent for the validation loop
+    validator = rt.agent_node(
+        name="Risk Validator",
+        llm=get_llm(),
+        system_message=(
+            "You are a risk assessment validator. Given a risk analysis, check:\n"
+            "1. Are failure_rate and uncertainty between 0.0 and 1.0?\n"
+            "2. Is loss_range_low <= loss_range_high?\n"
+            "3. Are specific evidence sources cited (not generic statements)?\n"
+            "4. Are knowledge gaps identified?\n"
+            "If valid, respond with EXACTLY: VALID\n"
+            "If invalid, respond with: INVALID: [what needs fixing]"
+        ),
+    )
+
+    # Build prompt
     location_context = f" Location: ({lat}, {lng})." if lat and lng else ""
     prompt = (
         f"Business: {business_name}\n"
@@ -432,20 +449,46 @@ async def run_railtracks_analysis(
         f"Description: {risk_factor_description}\n"
         f"Domain: {domain}\n"
         f"{location_context}\n\n"
-        f"Analyse this risk factor using all available tools. Start by listing domain artifacts, "
-        f"then search for relevant data, read key documents, check geospatial context, "
-        f"and calculate precise risk metrics. Cite specific evidence sources."
+        f"Analyse this risk factor using all available tools."
     )
 
-    result = await rt.call(agent, prompt)
+    # Validation loop — generate → validate → revise (max 3 iterations)
+    max_retries = 3
+    analysis_text = ""
+    validation_text = ""
+    validation_feedback = ""
+
+    for attempt in range(max_retries):
+        # Generate analysis
+        with rt.Session(name=f"WTF Risk Analysis (attempt {attempt+1})") as session:
+            result = await rt.call(
+                agent,
+                prompt if attempt == 0 else
+                f"Previous analysis was invalid. Fix these issues: {validation_feedback}\n\nOriginal request:\n{prompt}"
+            )
+            analysis_text = result.text or ""
+
+        # Validate
+        with rt.Session(name="WTF Validation") as session:
+            validation = await rt.call(
+                validator,
+                f"Validate this risk analysis:\n\n{analysis_text}"
+            )
+            validation_text = validation.text or ""
+
+        if "VALID" in validation_text and "INVALID" not in validation_text:
+            break
+        validation_feedback = validation_text
 
     return {
         "available": True,
-        "text": result.text,
+        "text": analysis_text,
         "risk_factor_id": risk_factor_name,
-        "summary": result.text[:500] if result.text else "No analysis generated",
+        "summary": analysis_text[:500] if analysis_text else "No analysis generated",
         "tokens_used": 0,
         "engine": "railtracks",
         "domain": domain,
+        "validation_attempts": attempt + 1,
+        "validated": "VALID" in validation_text and "INVALID" not in validation_text,
         "artifacts_available": len(find_relevant_artifacts(domain, risk_factor_name)),
     }
