@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { formatTokens, formatUSD } from '../utils/formatting';
+import { fetchSponsorStatus } from '../api';
 import type { Depth } from '../types';
 
 export interface TopBarKPIs {
@@ -69,6 +70,16 @@ const DEPTH_TITLES: Record<Depth, string> = {
   3: 'Deep Run — parallel agents, ~200k tokens',
 };
 
+const SPONSOR_NAMES: Array<{ key: string; label: string }> = [
+  { key: 'railtracks', label: 'Railtracks' },
+  { key: 'senso', label: 'Senso' },
+  { key: 'nexla', label: 'Nexla' },
+  { key: 'digitalocean', label: 'DigitalOcean' },
+  { key: 'unkey', label: 'Unkey' },
+  { key: 'augment', label: 'Augment' },
+  { key: 'google_ai', label: 'Google AI' },
+];
+
 export default function TopBar({
   businessName,
   totalTokens,
@@ -82,6 +93,14 @@ export default function TopBar({
   hasSteps,
   onBack,
 }: TopBarProps) {
+  const [sponsorStatus, setSponsorStatus] = useState<Record<string, boolean>>({});
+
+  useEffect(() => {
+    fetchSponsorStatus()
+      .then(setSponsorStatus)
+      .catch(() => {/* silent — backend may not be running */});
+  }, []);
+
   return (
     <div className="top-bar">
       <div className="top-bar__left">
@@ -191,8 +210,26 @@ export default function TopBar({
           lineHeight: 1.4,
           whiteSpace: 'nowrap',
         }}>
-          <span style={{ display: 'block', marginBottom: '1px', fontWeight: 500, color: 'rgba(255,255,255,0.2)', textTransform: 'uppercase', fontSize: '9px', letterSpacing: '0.08em' }}>Built with</span>
-          Railtracks · Senso · Nexla · DigitalOcean · Unkey · Augment · Google AI
+          <span style={{ display: 'block', marginBottom: '3px', fontWeight: 500, color: 'rgba(255,255,255,0.2)', textTransform: 'uppercase', fontSize: '9px', letterSpacing: '0.08em' }}>Built with</span>
+          <span style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', alignItems: 'center' }}>
+            {SPONSOR_NAMES.map(({ key, label }) => {
+              const isLive = sponsorStatus[key];
+              const hasStatus = key in sponsorStatus;
+              const dotColor = !hasStatus ? 'rgba(255,255,255,0.2)' : isLive ? '#00ff88' : 'rgba(255,255,255,0.2)';
+              const labelColor = !hasStatus ? 'rgba(255,255,255,0.3)' : isLive ? 'rgba(0,255,136,0.7)' : 'rgba(255,255,255,0.25)';
+              return (
+                <span key={key} style={{ display: 'inline-flex', alignItems: 'center', gap: '3px' }}>
+                  <span style={{
+                    width: '5px', height: '5px', borderRadius: '50%',
+                    background: dotColor,
+                    boxShadow: (hasStatus && isLive) ? '0 0 4px #00ff88' : 'none',
+                    flexShrink: 0,
+                  }} />
+                  <span style={{ color: labelColor }}>{label}</span>
+                </span>
+              );
+            })}
+          </span>
         </div>
       </div>
     </div>

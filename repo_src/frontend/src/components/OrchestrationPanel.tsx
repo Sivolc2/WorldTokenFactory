@@ -119,7 +119,11 @@ function EvidenceChip({ source }: { source: { name: string; type: string; contri
 
 // ── Main component ───────────────────────────────────────────────────
 
-export default function OrchestrationPanel() {
+interface OrchestrationPanelProps {
+  onResult?: (result: Record<string, unknown>) => void;
+}
+
+export default function OrchestrationPanel({ onResult }: OrchestrationPanelProps) {
   const [events, setEvents] = useState<OrchestratorEvent[]>([]);
   const [systems, setSystems] = useState<SystemStatus[]>([
     { name: 'LOCAL CATALOG', status: 'pending' },
@@ -131,7 +135,7 @@ export default function OrchestrationPanel() {
   const [modelUsed, setModelUsed] = useState<string>('');
   const [tokens, setTokens] = useState(0);
   const [isRunning, setIsRunning] = useState(false);
-  const [isComplete, setIsComplete] = useState(false);
+  const [_isComplete, setIsComplete] = useState(false);
   const [meta, setMeta] = useState<OrchestratorEvent['orchestrator_meta'] | null>(null);
   const [phase, setPhase] = useState('idle');
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -181,8 +185,9 @@ export default function OrchestrationPanel() {
       setIsComplete(true);
       setIsRunning(false);
       if (evt.orchestrator_meta) setMeta(evt.orchestrator_meta);
+      if (onResult && evt.result) onResult(evt.result);
     }
-  }, []);
+  }, [onResult]);
 
   const runOrchestration = useCallback(async (
     businessName: string, stepName: string, rfName: string, rfDesc: string,

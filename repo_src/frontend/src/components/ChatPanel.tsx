@@ -3,6 +3,10 @@
  * Provides a conversational interface to the risk assessment engine.
  */
 import { useState, useCallback } from 'react';
+import { setApiKey } from '../api';
+
+// Expose setApiKey so callers can pass in an Unkey key
+export { setApiKey };
 
 // Type-safe wrapper that works with or without assistant-ui installed
 interface ChatMessage {
@@ -12,7 +16,7 @@ interface ChatMessage {
   timestamp: Date;
 }
 
-const API_BASE = (import.meta as unknown as { env: Record<string, string | undefined> }).env.VITE_API_URL || 'http://localhost:8000';
+const API_BASE = (typeof import.meta !== 'undefined' && (import.meta as any).env?.VITE_API_URL) || 'http://localhost:8000';
 
 export default function ChatPanel() {
   const [messages, setMessages] = useState<ChatMessage[]>([
@@ -40,9 +44,14 @@ export default function ChatPanel() {
     setIsLoading(true);
 
     try {
+      // Build auth headers inline (mirrors api.ts authHeaders for the chat endpoint)
+      const chatHeaders: Record<string, string> = { 'Content-Type': 'application/json' };
+      const storedKey = typeof localStorage !== 'undefined' ? localStorage.getItem('wtf_api_key') : null;
+      if (storedKey) chatHeaders['X-API-Key'] = storedKey;
+
       const res = await fetch(`${API_BASE}/api/chat`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: chatHeaders,
         body: JSON.stringify({
           prompt: userMsg.content,
           system_message: "You are a World Token Factory risk analyst. Help users understand business risks by decomposing their business into risk factors. Be specific with numbers and evidence. If asked about a specific business, describe 3-5 key operational steps and their risk factors.",

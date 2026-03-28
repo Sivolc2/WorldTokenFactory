@@ -2,6 +2,14 @@ import type { Depth, Step, AnalyseStreamEvent } from './types';
 
 const API_BASE = (import.meta as unknown as { env: Record<string, string | undefined> }).env?.VITE_API_URL ?? '';
 
+let _apiKey: string | null = null;
+export function setApiKey(key: string | null) { _apiKey = key; }
+function authHeaders(): Record<string, string> {
+  const h: Record<string, string> = { 'Content-Type': 'application/json' };
+  if (_apiKey) h['X-API-Key'] = _apiKey;
+  return h;
+}
+
 async function* readNDJSON(response: Response): AsyncGenerator<unknown> {
   const reader = response.body!.getReader();
   const decoder = new TextDecoder();
@@ -40,7 +48,7 @@ export type DecomposeEvent =
 export async function* streamDecompose(description: string): AsyncGenerator<DecomposeEvent> {
   const response = await fetch(`${API_BASE}/api/decompose`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: authHeaders(),
     body: JSON.stringify({ description, max_steps: 5 }),
   });
 
@@ -94,7 +102,7 @@ export interface AnalyseParams {
 export async function* streamAnalyse(params: AnalyseParams): AsyncGenerator<AnalyseStreamEvent> {
   const response = await fetch(`${API_BASE}/api/analyse`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: authHeaders(),
     body: JSON.stringify(params),
   });
 
@@ -124,4 +132,44 @@ export async function fetchDocument(domain: string, file: string): Promise<strin
   const response = await fetch(`${API_BASE}/api/document?domain=${encodeURIComponent(domain)}&file=${encodeURIComponent(file)}`);
   if (!response.ok) throw new Error(`HTTP ${response.status}`);
   return response.text();
+}
+
+export async function fetchHealth(): Promise<Record<string, unknown>> {
+  const r = await fetch(`${API_BASE}/api/health`);
+  if (!r.ok) throw new Error(`HTTP ${r.status}`);
+  return r.json();
+}
+
+export async function fetchSponsorStatus(): Promise<Record<string, boolean>> {
+  const r = await fetch(`${API_BASE}/api/sponsor-status`);
+  if (!r.ok) throw new Error(`HTTP ${r.status}`);
+  return r.json();
+}
+
+export async function fetchAvailableModels(): Promise<{models: Array<{id: string; tier: string; speed: string; cost: string; strengths: string[]}>}> {
+  const r = await fetch(`${API_BASE}/api/models`);
+  if (!r.ok) throw new Error(`HTTP ${r.status}`);
+  return r.json();
+}
+
+export async function routeModel(prompt: string, systemMessage?: string): Promise<{task_type: string; selected_model: string; reason: string}> {
+  const r = await fetch(`${API_BASE}/api/model-route`, {
+    method: 'POST',
+    headers: authHeaders(),
+    body: JSON.stringify({ prompt, system_message: systemMessage }),
+  });
+  if (!r.ok) throw new Error(`HTTP ${r.status}`);
+  return r.json();
+}
+
+export async function fetchOrchestratorSystems(): Promise<Record<string, boolean>> {
+  const r = await fetch(`${API_BASE}/api/orchestrate/systems`);
+  if (!r.ok) throw new Error(`HTTP ${r.status}`);
+  return r.json();
+}
+
+export async function ingestSensoDocuments(): Promise<{ingested: number; results: unknown[]}> {
+  const r = await fetch(`${API_BASE}/api/senso/ingest-all`, { method: 'POST', headers: authHeaders() });
+  if (!r.ok) throw new Error(`HTTP ${r.status}`);
+  return r.json();
 }

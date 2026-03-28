@@ -641,7 +641,14 @@ export default function App() {
             boxShadow: '0 8px 40px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(0, 204, 255, 0.2)',
           }}
         >
-          <OrchestrationPanel />
+          <OrchestrationPanel onResult={(result) => {
+            if (result && result.risk_factor_id) {
+              setAnalysisResults(prev => ({
+                ...prev,
+                [result.risk_factor_id as string]: result as unknown as AnalysisResult,
+              }));
+            }
+          }} />
         </div>
       )}
 
