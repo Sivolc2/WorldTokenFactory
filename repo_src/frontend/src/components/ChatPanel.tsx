@@ -43,7 +43,12 @@ export default function ChatPanel() {
       const res = await fetch(`${API_BASE}/api/chat`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message: userMsg.content }),
+        body: JSON.stringify({
+          prompt: userMsg.content,
+          system_message: "You are a World Token Factory risk analyst. Help users understand business risks by decomposing their business into risk factors. Be specific with numbers and evidence. If asked about a specific business, describe 3-5 key operational steps and their risk factors.",
+          max_tokens: 2048,
+          temperature: 0.3,
+        }),
       });
       const data = await res.json();
 

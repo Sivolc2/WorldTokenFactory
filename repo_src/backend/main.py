@@ -53,7 +53,7 @@ async def lifespan(app: FastAPI):
     # Any cleanup code would go here
     print("Application shutdown complete.")
 
-app = FastAPI(title="AI-Friendly Repository Backend", version="1.0.0", lifespan=lifespan)
+app = FastAPI(title="World Token Factory", version="2.0.0", lifespan=lifespan)
 
 # Configure CORS middleware
 app.add_middleware(
@@ -83,7 +83,23 @@ async def read_root():
 @app.get("/api/hello")
 async def read_hello():
     """A simple API endpoint to test connectivity."""
-    return {"message": "Hello from FastAPI Backend!"}
+    return {"message": "Hello from World Token Factory!"}
+
+@app.get("/api/sponsor-status")
+async def sponsor_status():
+    """Check which sponsor tool integrations are active."""
+    from repo_src.backend.agents.railtracks_orchestrator import RAILTRACKS_AVAILABLE
+    return {
+        "gemini": bool(os.getenv("GEMINI_API_KEY")),
+        "openrouter": bool(os.getenv("OPENROUTER_API_KEY")),
+        "senso": bool(os.getenv("SENSO_API_KEY")),
+        "unkey": bool(os.getenv("UNKEY_API_ID")),
+        "nexla": bool(os.getenv("NEXLA_TOKEN")),
+        "railtracks": RAILTRACKS_AVAILABLE,
+        "digitalocean": True,
+        "augment": True,
+        "assistant_ui": True,
+    }
 
 # Example (commented out) CRUD endpoints would go here
 # You would typically put these in separate router files (e.g., in an `api` or `routers` directory)

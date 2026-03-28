@@ -64,29 +64,24 @@ async def get_available_models():
     return {
         "models": [
             {
-                "id": "anthropic/claude-3.5-sonnet",
-                "name": "Claude 3.5 Sonnet",
-                "description": "Most intelligent model, best for complex tasks"
+                "id": "gemini-2.5-flash",
+                "name": "Gemini 2.5 Flash",
+                "description": "Google's fastest model — primary for World Token Factory (free via hackathon credits)"
             },
             {
-                "id": "anthropic/claude-3-haiku",
-                "name": "Claude 3 Haiku",
-                "description": "Fast and cost-effective for simpler tasks"
+                "id": "gemini-2.5-pro",
+                "name": "Gemini 2.5 Pro",
+                "description": "Google's most capable model — for deep risk analysis"
+            },
+            {
+                "id": "anthropic/claude-3.5-sonnet",
+                "name": "Claude 3.5 Sonnet",
+                "description": "Most intelligent model, best for complex tasks (via OpenRouter)"
             },
             {
                 "id": "openai/gpt-4-turbo",
                 "name": "GPT-4 Turbo",
-                "description": "OpenAI's most capable model"
+                "description": "OpenAI's most capable model (via OpenRouter)"
             },
-            {
-                "id": "openai/gpt-3.5-turbo",
-                "name": "GPT-3.5 Turbo",
-                "description": "Fast and cost-effective OpenAI model"
-            },
-            {
-                "id": "meta-llama/llama-3.1-70b-instruct",
-                "name": "Llama 3.1 70B",
-                "description": "Open-source model from Meta"
-            }
         ]
     }

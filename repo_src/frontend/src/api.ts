@@ -1,5 +1,7 @@
 import type { Depth, Step, AnalyseStreamEvent } from './types';
 
+const API_BASE = (import.meta as unknown as { env: Record<string, string | undefined> }).env?.VITE_API_URL ?? '';
+
 async function* readNDJSON(response: Response): AsyncGenerator<unknown> {
   const reader = response.body!.getReader();
   const decoder = new TextDecoder();
@@ -36,7 +38,7 @@ export type DecomposeEvent =
   | { type: 'meta'; business_name: string; tokens_used: number };
 
 export async function* streamDecompose(description: string): AsyncGenerator<DecomposeEvent> {
-  const response = await fetch('/api/decompose', {
+  const response = await fetch(`${API_BASE}/api/decompose`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ description, max_steps: 5 }),
@@ -89,7 +91,7 @@ export interface AnalyseParams {
 }
 
 export async function* streamAnalyse(params: AnalyseParams): AsyncGenerator<AnalyseStreamEvent> {
-  const response = await fetch('/api/analyse', {
+  const response = await fetch(`${API_BASE}/api/analyse`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(params),
@@ -107,11 +109,11 @@ export async function* streamAnalyse(params: AnalyseParams): AsyncGenerator<Anal
 export async function fetchYoutubeMeta(
   url: string
 ): Promise<{ title: string; thumbnail_url: string; url: string }> {
-  const response = await fetch(`/api/youtube-meta?url=${encodeURIComponent(url)}`);
+  const response = await fetch(`${API_BASE}/api/youtube-meta?url=${encodeURIComponent(url)}`);
   if (!response.ok) throw new Error(`HTTP ${response.status}`);
   return response.json();
 }
 
 export function getMediaUrl(domain: string, filename: string): string {
-  return `/api/media/${domain}/${encodeURIComponent(filename)}`;
+  return `${API_BASE}/api/media/${domain}/${encodeURIComponent(filename)}`;
 }
