@@ -7,9 +7,11 @@ from datetime import datetime
 load_dotenv()
 
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
+DO_GRADIENT_KEY = os.getenv("DIGITAL_OCEAN_MODEL_ACCESS_KEY")
 OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")
 DEFAULT_MODEL_NAME = os.getenv("OPENROUTER_MODEL_NAME", "anthropic/claude-3.5-sonnet")
 GEMINI_DEFAULT_MODEL = "gemini-2.5-flash"
+DO_GRADIENT_DEFAULT_MODEL = "llama3.3-70b-instruct"
 
 # These are optional but recommended for OpenRouter tracking
 YOUR_SITE_URL = os.getenv("YOUR_SITE_URL", "http://localhost:5173")
@@ -29,9 +31,22 @@ if GEMINI_API_KEY:
     except ImportError:
         print("Warning: GEMINI_API_KEY is set but google-genai package is not installed. Falling back to OpenRouter.")
 
+# --- DO Gradient client (second priority — uses DO credits) ---
+gradient_client = None
+if not gemini_client and DO_GRADIENT_KEY:
+    try:
+        from openai import OpenAI
+        gradient_client = OpenAI(
+            base_url="https://inference.do-ai.run/v1/",
+            api_key=DO_GRADIENT_KEY,
+        )
+        print("DO Gradient client initialised (OpenAI-compatible).")
+    except ImportError:
+        print("Warning: DIGITAL_OCEAN_MODEL_ACCESS_KEY is set but openai package is not installed.")
+
 # --- OpenRouter client (fallback) ---
 openrouter_client = None
-if not gemini_client:
+if not gemini_client and not gradient_client:
     if OPENROUTER_API_KEY:
         from openai import OpenAI
         openrouter_client = OpenAI(
@@ -39,7 +54,7 @@ if not gemini_client:
             api_key=OPENROUTER_API_KEY,
         )
     else:
-        print("Warning: Neither GEMINI_API_KEY nor OPENROUTER_API_KEY found. LLM calls will fail.")
+        print("Warning: No LLM key found (GEMINI_API_KEY, DIGITAL_OCEAN_MODEL_ACCESS_KEY, or OPENROUTER_API_KEY).")
 
 # Backwards-compatible alias used by older callers that imported `client` directly
 client = openrouter_client
@@ -56,8 +71,9 @@ async def ask_llm(
     Sends a prompt to the configured LLM and returns the response.
 
     Preference order:
-      1. Google Gemini  — if GEMINI_API_KEY is set
-      2. OpenRouter     — if OPENROUTER_API_KEY is set (fallback)
+      1. Google Gemini       — if GEMINI_API_KEY is set (free hackathon credits)
+      2. DO Gradient         — if DIGITAL_OCEAN_MODEL_ACCESS_KEY is set (DO credits)
+      3. OpenRouter          — if OPENROUTER_API_KEY is set (paid fallback)
 
     Args:
         prompt_text: The user prompt to send to the LLM
@@ -92,6 +108,25 @@ async def ask_llm(
         except Exception as e:
             print(f"Error calling Gemini API with model {model_to_use}: {e}")
             return f"Error: Failed to get response from Gemini. Details: {str(e)}"
+
+    # --- DO Gradient path ---
+    if gradient_client is not None:
+        model_to_use = model_override or DO_GRADIENT_DEFAULT_MODEL
+        try:
+            messages = [
+                {"role": "system", "content": system_message},
+                {"role": "user", "content": prompt_text}
+            ]
+            response = gradient_client.chat.completions.create(
+                model=model_to_use,
+                messages=messages,
+                temperature=temperature,
+                max_tokens=max_tokens,
+            )
+            return response.choices[0].message.content
+        except Exception as e:
+            print(f"Error calling DO Gradient with model {model_to_use}: {e}")
+            return f"Error: Failed to get response from DO Gradient. Details: {str(e)}"
 
     # --- OpenRouter fallback path ---
     if openrouter_client is not None:
