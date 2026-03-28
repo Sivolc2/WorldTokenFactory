@@ -1,1 +1,24 @@
 /* Component-level overrides, if any. Most styles live in index.css. */
+
+/* ── World Token Factory — Signal mood (ControlledChaos) ─────────── */
+:root {
+  --color-bg: #0a0a0f;
+  --color-fg: #e0ffe0;
+  --color-accent: #00ff88;
+  --color-accent-secondary: #00ccff;
+  --color-discord: #ff0066;
+  --color-surface: rgba(255, 255, 255, 0.04);
+  --color-border: rgba(0, 255, 136, 0.15);
+  --color-text-muted: rgba(224, 255, 224, 0.5);
+
+  /* Typography */
+  --font-display: 'Space Grotesk', system-ui, sans-serif;
+  --font-body: 'Inter', system-ui, sans-serif;
+  --font-mono: 'Space Mono', 'JetBrains Mono', monospace;
+
+  /* Risk severity colors */
+  --risk-critical: #ff0066;
+  --risk-high: #ff6b35;
+  --risk-medium: #ffaa00;
+  --risk-low: #00ff88;
+}

@@ -38,6 +38,8 @@ from repo_src.backend.routers.analyse import router as analyse_router
 from repo_src.backend.routers.files import router as files_router
 from repo_src.backend.routers.media import router as media_router
 from repo_src.backend.routers.youtube_meta import router as youtube_meta_router
+from repo_src.backend.routers.railtracks_route import router as railtracks_router
+from repo_src.backend.routers.nexla_route import router as nexla_router
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -70,6 +72,8 @@ app.include_router(analyse_router)
 app.include_router(files_router)
 app.include_router(media_router)
 app.include_router(youtube_meta_router)
+app.include_router(railtracks_router)
+app.include_router(nexla_router)
 
 @app.get("/")
 async def read_root():

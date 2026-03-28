@@ -1,14 +1,15 @@
 import json
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends, Request
 from fastapi.responses import StreamingResponse
 from repo_src.backend.models.business import DecomposeRequest
 from repo_src.backend.agents.decomposer import decompose
+from repo_src.backend.middleware.unkey_middleware import verify_api_key
 
 router = APIRouter(prefix="/api", tags=["decompose"])
 
 
 @router.post("/decompose")
-async def decompose_endpoint(request: DecomposeRequest):
+async def decompose_endpoint(request: DecomposeRequest, _auth: dict = Depends(verify_api_key)):
     async def generate():
         result = await decompose(request.description, request.max_steps)
         # Stream one step at a time

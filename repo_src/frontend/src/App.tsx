@@ -13,6 +13,7 @@ import MapView, { detectMapType, type BusinessMapType } from './components/MapVi
 import StepChainOverlay from './components/StepChainOverlay';
 import LHSPanel from './components/LHSPanel';
 import RHSPanel from './components/RHSPanel';
+import ChatPanel from './components/ChatPanel';
 
 type AppScreen = 'input' | 'main';
 
@@ -45,6 +46,7 @@ export default function App() {
 
   const [agentThread, setAgentThread] = useState<AgentThreadState | null>(null);
   const [isRunningAll, setIsRunningAll] = useState(false);
+  const [showChat, setShowChat] = useState(false);
 
   const abortControllersRef = useRef<Map<string, AbortController>>(new Map());
 
@@ -365,6 +367,54 @@ export default function App() {
             onDepthChange={(rfId, d) => setRiskFactorDepths((prev) => ({ ...prev, [rfId]: d }))}
             onAnalyse={(rfId, feedback) => handleAnalyse(rfId, feedback)}
           />
+        </div>
+      )}
+
+      {/* ── Floating chat toggle button ─────────────────────────────────── */}
+      <button
+        onClick={() => setShowChat(prev => !prev)}
+        title={showChat ? 'Close chat' : 'Open risk chat'}
+        style={{
+          position: 'fixed',
+          bottom: '24px',
+          right: '24px',
+          zIndex: 1000,
+          width: '48px',
+          height: '48px',
+          borderRadius: '50%',
+          background: showChat ? 'rgba(0, 255, 136, 0.15)' : 'var(--color-accent, #00ff88)',
+          border: showChat ? '1px solid rgba(0, 255, 136, 0.4)' : 'none',
+          color: showChat ? 'var(--color-accent, #00ff88)' : '#0a0a0f',
+          fontSize: '20px',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          cursor: 'pointer',
+          boxShadow: showChat
+            ? '0 0 16px rgba(0, 255, 136, 0.3)'
+            : '0 4px 20px rgba(0, 255, 136, 0.35)',
+          transition: 'all 0.2s ease',
+        }}
+      >
+        {showChat ? '✕' : '💬'}
+      </button>
+
+      {/* ── Sliding chat panel ──────────────────────────────────────────── */}
+      {showChat && (
+        <div
+          style={{
+            position: 'fixed',
+            bottom: '84px',
+            right: '24px',
+            zIndex: 999,
+            width: '380px',
+            height: '520px',
+            borderRadius: '12px',
+            overflow: 'hidden',
+            boxShadow: '0 8px 40px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(0, 255, 136, 0.15)',
+          }}
+        >
+          <ChatPanel />
         </div>
       )}
     </>

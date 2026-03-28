@@ -111,6 +111,20 @@ export default function TopBar({
             )}
           </button>
         )}
+
+        <div style={{
+          marginLeft: '8px',
+          paddingLeft: '12px',
+          borderLeft: '1px solid rgba(255,255,255,0.1)',
+          fontSize: '10px',
+          color: 'rgba(255,255,255,0.3)',
+          letterSpacing: '0.03em',
+          lineHeight: 1.4,
+          whiteSpace: 'nowrap',
+        }}>
+          <span style={{ display: 'block', marginBottom: '1px', fontWeight: 500, color: 'rgba(255,255,255,0.2)', textTransform: 'uppercase', fontSize: '9px', letterSpacing: '0.08em' }}>Built with</span>
+          Railtracks · Senso · Nexla · DigitalOcean · Unkey · Augment · Google AI
+        </div>
       </div>
     </div>
   );

@@ -5,6 +5,7 @@ from repo_src.backend.models.risk import AnalysisResult, Artifact, RiskMetrics
 from repo_src.backend.services.data_source import list_files, read_file
 from repo_src.backend.agents.depth1 import analyse_depth1
 from repo_src.backend.llm_chat.llm_interface import ask_llm
+from repo_src.backend.services.senso_service import senso_search
 
 ANALYSE_SYSTEM = """You are a senior risk analyst. Given a risk factor and supporting documents, produce a structured risk assessment.
 
@@ -68,6 +69,25 @@ async def analyse_depth2(
 
     yield {"event": "step", "text": f"Analysing {len(doc_chunks)} document(s) with LLM"}
 
+    # Enrich with Senso RAG context
+    senso_context = ""
+    try:
+        yield {"event": "step", "text": "Fetching regulatory context from Senso"}
+        senso_query = f"{risk_factor_name}: {step_context}"
+        senso_result = await senso_search(senso_query, top_k=5)
+        results = senso_result.get("results", [])
+        if results:
+            senso_snippets = "\n".join(
+                f"- {r.get('title', 'Untitled')}: {r.get('content', r.get('text', ''))[:300]}"
+                for r in results
+            )
+            senso_context = f"\nSenso Regulatory/Risk Context:\n{senso_snippets}\n"
+            yield {"event": "signal", "text": f"Senso returned {len(results)} context snippet(s)"}
+        elif senso_result.get("error"):
+            yield {"event": "signal", "text": f"Senso unavailable: {senso_result['error']}"}
+    except Exception as e:
+        yield {"event": "signal", "text": f"Senso search skipped: {e}"}
+
     if not doc_chunks:
         docs_text = "(No readable documents found for this risk factor — using context only)"
     else:
@@ -84,7 +104,8 @@ async def analyse_depth2(
         f"Risk Factor: {risk_factor_name}\n"
         f"Business Context: {business_context}\n"
         f"Step Context: {step_context}\n"
-        f"{feedback_section}\n"
+        f"{feedback_section}"
+        f"{senso_context}\n"
         f"Source Documents:\n{docs_text}"
     )
 

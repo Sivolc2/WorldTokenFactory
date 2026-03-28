@@ -1,0 +1,51 @@
+name: world-token-factory
+region: sfo
+services:
+  - name: backend
+    github:
+      repo: Sivolc2/WorldTokenFactory
+      branch: main
+      deploy_on_push: true
+    source_dir: /
+    environment_slug: python
+    build_command: pip install -r repo_src/backend/requirements.txt
+    run_command: uvicorn repo_src.backend.main:app --host 0.0.0.0 --port 8080
+    http_port: 8080
+    instance_count: 1
+    instance_size_slug: apps-s-1vcpu-0.5gb
+    envs:
+      - key: GEMINI_API_KEY
+        scope: RUN_TIME
+        type: SECRET
+      - key: OPENROUTER_API_KEY
+        scope: RUN_TIME
+        type: SECRET
+      - key: SENSO_API_KEY
+        scope: RUN_TIME
+        value: "tgr_ytBzOdHEHzMRbAhwzg41Iet6whl5qaeOUIeFXd-50xM"
+      - key: UNKEY_API_ID
+        scope: RUN_TIME
+        type: SECRET
+      - key: PORT
+        scope: RUN_TIME
+        value: "8080"
+    routes:
+      - path: /api
+      - path: /docs
+
+static_sites:
+  - name: frontend
+    github:
+      repo: Sivolc2/WorldTokenFactory
+      branch: main
+      deploy_on_push: true
+    source_dir: repo_src/frontend
+    build_command: npm install && npm run build
+    output_dir: dist
+    environment_slug: node-js
+    routes:
+      - path: /
+    envs:
+      - key: VITE_API_URL
+        scope: BUILD_TIME
+        value: "${backend.PUBLIC_URL}"

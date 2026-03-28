@@ -1,15 +1,16 @@
 import json
 import uuid
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends, Request
 from fastapi.responses import StreamingResponse
 from repo_src.backend.models.business import AnalyseRequest
 from repo_src.backend.services.token_counter import counter
+from repo_src.backend.middleware.unkey_middleware import verify_api_key
 
 router = APIRouter(prefix="/api", tags=["analyse"])
 
 
 @router.post("/analyse")
-async def analyse_endpoint(request: AnalyseRequest):
+async def analyse_endpoint(request: AnalyseRequest, _auth: dict = Depends(verify_api_key)):
     request_id = str(uuid.uuid4())
 
     async def generate():
