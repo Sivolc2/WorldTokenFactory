@@ -1,7 +1,10 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
 from dotenv import load_dotenv
 import os
+from pathlib import Path
 from contextlib import asynccontextmanager
 
 # Load environment variables from .env file if it exists
@@ -239,6 +242,21 @@ async def augment_search(request: dict):
     """Use Augment Context Engine to semantically search the codebase."""
     from repo_src.backend.services.augment_service import augment_search_codebase
     return await augment_search_codebase(request.get("query", ""))
+
+
+# ── Serve frontend static files (built by Dockerfile multi-stage) ──────────
+STATIC_DIR = Path(__file__).parent.parent.parent / "static"
+if STATIC_DIR.exists() and (STATIC_DIR / "index.html").exists():
+    # Serve static assets (JS, CSS, images)
+    app.mount("/assets", StaticFiles(directory=str(STATIC_DIR / "assets")), name="static-assets")
+
+    # Catch-all: serve index.html for any non-API route (SPA routing)
+    @app.get("/{path:path}")
+    async def serve_spa(path: str):
+        file_path = STATIC_DIR / path
+        if file_path.exists() and file_path.is_file():
+            return FileResponse(str(file_path))
+        return FileResponse(str(STATIC_DIR / "index.html"))
 
 
 if __name__ == "__main__":
