@@ -87,6 +87,7 @@ export interface AnalyseParams {
   step_context: string;
   depth: Depth;
   data_domains: string[];
+  model?: string;
   feedback?: string;
 }
 

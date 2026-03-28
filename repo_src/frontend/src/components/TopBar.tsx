@@ -1,18 +1,35 @@
 import { useEffect, useRef, useState } from 'react';
 import { formatTokens, formatUSD } from '../utils/formatting';
+import type { Depth } from '../types';
 
 export interface TopBarKPIs {
   totalExposureLow: number;
   totalExposureHigh: number;
-  criticalCount: number; // FR > 0.6 or UN > 0.6
+  criticalCount: number;
   analyzedCount: number;
   totalRiskFactors: number;
 }
+
+export interface AnalystModel {
+  id: string;
+  label: string;
+  sublabel: string;
+}
+
+export const ANALYST_MODELS: AnalystModel[] = [
+  { id: 'claude-haiku-4-5',   label: 'Haiku',   sublabel: 'Fast' },
+  { id: 'claude-sonnet-4-6',  label: 'Sonnet',  sublabel: 'Balanced' },
+  { id: 'claude-opus-4-6',    label: 'Opus',    sublabel: 'Deep' },
+];
 
 interface TopBarProps {
   businessName: string;
   totalTokens: number;
   kpis: TopBarKPIs | null;
+  globalDepth: Depth;
+  onGlobalDepthChange: (d: Depth) => void;
+  globalModel: string;
+  onGlobalModelChange: (m: string) => void;
   onRunAll: () => void;
   isRunningAll: boolean;
   hasSteps: boolean;
@@ -29,7 +46,6 @@ function AnimatedNumber({ value }: { value: number }) {
     const end = value;
     prevRef.current = value;
     if (start === end) return;
-
     const duration = 400;
     const startTime = performance.now();
     const animate = (now: number) => {
@@ -45,10 +61,22 @@ function AnimatedNumber({ value }: { value: number }) {
   return <>{formatTokens(displayed)}</>;
 }
 
+const DEPTHS: Depth[] = [1, 2, 3];
+const DEPTH_LABELS: Record<Depth, string> = { 1: 'D1', 2: 'D2', 3: 'D3' };
+const DEPTH_TITLES: Record<Depth, string> = {
+  1: 'Quick Scan — filename-only, ~350 tokens',
+  2: 'Research Brief — reads files, ~3k tokens',
+  3: 'Deep Run — parallel agents, ~200k tokens',
+};
+
 export default function TopBar({
   businessName,
   totalTokens,
   kpis,
+  globalDepth,
+  onGlobalDepthChange,
+  globalModel,
+  onGlobalModelChange,
   onRunAll,
   isRunningAll,
   hasSteps,
@@ -65,6 +93,7 @@ export default function TopBar({
         <div className="top-bar__logo">World Token Factory</div>
         {businessName && <div className="top-bar__name">{businessName}</div>}
       </div>
+
       <div className="top-bar__right">
         {kpis && kpis.analyzedCount > 0 && (
           <>
@@ -94,22 +123,62 @@ export default function TopBar({
         </div>
 
         {hasSteps && (
-          <button
-            className="top-bar__run-all"
-            onClick={onRunAll}
-            disabled={isRunningAll}
-          >
-            {isRunningAll ? (
-              <>
-                Running{' '}
-                <span className="loading-dots" style={{ fontSize: 10 }}>
-                  <span /><span /><span />
-                </span>
-              </>
-            ) : (
-              'Run All ▶'
-            )}
-          </button>
+          <div className="run-all-panel">
+            {/* Depth picker */}
+            <div className="run-all-panel__group">
+              <span className="run-all-panel__group-label">Depth</span>
+              <div className="run-all-picker">
+                {DEPTHS.map((d) => (
+                  <button
+                    key={d}
+                    className={`run-all-picker__btn${globalDepth === d ? ' run-all-picker__btn--active' : ''}`}
+                    onClick={() => onGlobalDepthChange(d)}
+                    title={DEPTH_TITLES[d]}
+                    disabled={isRunningAll}
+                  >
+                    {DEPTH_LABELS[d]}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="run-all-panel__sep" />
+
+            {/* Model picker */}
+            <div className="run-all-panel__group">
+              <span className="run-all-panel__group-label">Model</span>
+              <select
+                className="run-all-select"
+                value={globalModel}
+                onChange={(e) => onGlobalModelChange(e.target.value)}
+                disabled={isRunningAll}
+              >
+                {ANALYST_MODELS.map((m) => (
+                  <option key={m.id} value={m.id}>{m.label} — {m.sublabel}</option>
+                ))}
+              </select>
+            </div>
+
+            <div className="run-all-panel__sep" />
+
+            {/* Run button */}
+            <button
+              className="top-bar__run-all"
+              onClick={onRunAll}
+              disabled={isRunningAll}
+            >
+              {isRunningAll ? (
+                <>
+                  Running{' '}
+                  <span className="loading-dots" style={{ fontSize: 10 }}>
+                    <span /><span /><span />
+                  </span>
+                </>
+              ) : (
+                'Run All ▶'
+              )}
+            </button>
+          </div>
         )}
 
         <div style={{

@@ -7,7 +7,7 @@ export interface ChartPoint {
 }
 
 const PAD = { top: 12, right: 54, bottom: 40, left: 54 };
-const SVG_H = 240;
+const SVG_H = 288;
 
 interface Props {
   liveCurve: ChartPoint[];

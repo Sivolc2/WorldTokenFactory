@@ -1,5 +1,6 @@
 import { useEffect, useRef, useMemo } from 'react';
 import type { MapFocus } from './MapView';
+import { formatUSD, formatPct } from '../utils/formatting';
 
 export interface DocSection {
   id: string;
@@ -10,19 +11,43 @@ export interface DocSection {
   location?: MapFocus;
 }
 
+export interface SectionMetric {
+  failureRate: number;
+  lossLow: number;
+  lossHigh: number;
+  isAnalyzed: boolean;
+}
+
 interface Props {
   markdown: string;
   activeSectionId: string | null;
   sectionLocations: Record<string, MapFocus>;
+  sectionMetrics?: Record<string, SectionMetric>;
   onSectionFocus: (sectionId: string, location: MapFocus | null) => void;
 }
 
-// Slug a heading to a stable ID
 function slugify(text: string): string {
   return text.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
 }
 
-// Render inline markdown: **bold**, *em*, `code`
+function riskLevel(fr: number): 'critical' | 'high' | 'med' | 'low' {
+  if (fr >= 0.6) return 'critical';
+  if (fr >= 0.35) return 'high';
+  if (fr >= 0.2)  return 'med';
+  return 'low';
+}
+
+// Detect status/uncertainty keywords and return a color class
+function statusColor(line: string): string | null {
+  const lower = line.toLowerCase();
+  if (lower.includes('critical')) return 'critical';
+  if (lower.includes('active')) return 'high';
+  if (lower.includes('high')) return 'high';
+  if (lower.includes('moderate') || lower.includes('elevated')) return 'med';
+  if (lower.includes('low') || lower.includes('latent')) return 'low';
+  return null;
+}
+
 function renderInline(text: string): React.ReactNode {
   const parts = text.split(/(\*\*[^*]+\*\*|\*[^*]+\*|`[^`]+`)/);
   return parts.map((p, i) => {
@@ -33,7 +58,6 @@ function renderInline(text: string): React.ReactNode {
   });
 }
 
-// Render a block of content lines (everything below the ## heading)
 function renderContent(content: string): React.ReactNode[] {
   const lines = content.split('\n');
   const nodes: React.ReactNode[] = [];
@@ -80,14 +104,13 @@ function renderContent(content: string): React.ReactNode[] {
       );
       continue;
     }
-    // Table rows (skip for simplicity — render as code block)
+    // Table rows
     if (line.startsWith('|')) {
       const tableLines: string[] = [];
       while (i < lines.length && lines[i].startsWith('|')) {
         tableLines.push(lines[i]);
         i++;
       }
-      // Parse table
       const rows = tableLines.filter(r => !r.match(/^\|[\s-|]+\|$/));
       nodes.push(
         <table key={i} className="dv-table">
@@ -112,12 +135,26 @@ function renderContent(content: string): React.ReactNode[] {
         codeLines.push(lines[i]);
         i++;
       }
-      i++; // skip closing ```
+      i++;
       nodes.push(<pre key={i} className="dv-code-block"><code>{codeLines.join('\n')}</code></pre>);
       continue;
     }
     // Empty line
     if (line.trim() === '') {
+      i++; continue;
+    }
+    // Status / uncertainty lines — render with colored pill
+    if (line.startsWith('**Status**:') || line.startsWith('**Uncertainty level**:')) {
+      const colonIdx = line.indexOf(':');
+      const label = line.slice(2, colonIdx - 2); // strip **...**
+      const value = line.slice(colonIdx + 1).trim();
+      const color = statusColor(value);
+      nodes.push(
+        <p key={i} className="dv-p dv-status-line">
+          <span className="dv-status-label">{label}</span>
+          <span className={`dv-status-pill${color ? ` dv-status-pill--${color}` : ''}`}>{value}</span>
+        </p>
+      );
       i++; continue;
     }
     // Paragraph
@@ -162,23 +199,23 @@ export function parseDocSections(markdown: string, sectionLocations: Record<stri
   return sections;
 }
 
-export default function DocumentViewer({ markdown, activeSectionId, sectionLocations, onSectionFocus }: Props) {
+export default function DocumentViewer({ markdown, activeSectionId, sectionLocations, sectionMetrics, onSectionFocus }: Props) {
   const sections = useMemo(() => parseDocSections(markdown, sectionLocations), [markdown, sectionLocations]);
   const sectionRefs = useRef<Map<string, HTMLDivElement>>(new Map());
 
-  // Auto-scroll to active section
   useEffect(() => {
     if (!activeSectionId) return;
     const el = sectionRefs.current.get(activeSectionId);
-    if (el) {
-      el.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    }
+    if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
   }, [activeSectionId]);
 
   return (
     <div className="dv-wrap">
       {sections.map((section) => {
         const isActive = section.id === activeSectionId;
+        const metric = sectionMetrics?.[section.id];
+        const level = metric ? riskLevel(metric.failureRate) : null;
+
         return (
           <div
             key={section.id}
@@ -197,6 +234,22 @@ export default function DocumentViewer({ markdown, activeSectionId, sectionLocat
               {section.location && <span className="dv-h2__pin">📍</span>}
               {renderInline(section.heading)}
             </h2>
+
+            {metric && (
+              <div className={`dv-metric-bar dv-metric-bar--${level}`}>
+                <span className="dv-metric-bar__range">
+                  {formatUSD(metric.lossLow)}–{formatUSD(metric.lossHigh)}
+                </span>
+                <span className="dv-metric-bar__sep">·</span>
+                <span className="dv-metric-bar__fr">
+                  {formatPct(metric.failureRate)} failure rate
+                </span>
+                {!metric.isAnalyzed && (
+                  <span className="dv-metric-bar__est">estimated</span>
+                )}
+              </div>
+            )}
+
             <div className="dv-content">
               {renderContent(section.content)}
             </div>

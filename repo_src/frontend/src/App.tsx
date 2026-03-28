@@ -6,7 +6,7 @@ import type {
   AgentThreadState,
   AgentThreadStep,
 } from './types';
-import { streamDecompose, streamAnalyse, getMediaUrl, fetchDocument } from './api';
+import { streamDecompose, streamAnalyse, fetchDocument } from './api';
 import TopBar, { type TopBarKPIs } from './components/TopBar';
 import BusinessInput from './components/BusinessInput';
 import MapView, { detectMapType, type BusinessMapType, type MapFocus } from './components/MapView';
@@ -16,7 +16,7 @@ import ExecutiveReport from './components/ExecutiveReport';
 import AgentDebugPane from './components/AgentDebugPane';
 import ChatPanel from './components/ChatPanel';
 import OrchestrationPanel from './components/OrchestrationPanel';
-import DocumentViewer from './components/DocumentViewer';
+import DocumentViewer, { type SectionMetric } from './components/DocumentViewer';
 
 type AppScreen = 'input' | 'main';
 
@@ -36,31 +36,71 @@ function tokenEstimateNumber(depth: Depth): number {
   }
 }
 
+// ── Map overlay regions (coloured rectangles highlighting key geographic zones) ──
+
 const OIL_STEP_FOCUSES: MapFocus[] = [
-  { center: [31.47, -103.74], zoom: 11, tiffUrl: getMediaUrl('oil', 'artifacts/permian_basin_midland_dem_30m.tif') }, // Permian fields — Delaware Basin well pad grid
-  { center: [30.92, -102.47], zoom: 10, tiffUrl: getMediaUrl('oil', 'artifacts/cushing_oklahoma_dem_30m.tif') },       // Midstream egress — Waha Hub / Cushing terrain
-  { center: [28.17, -88.49],  zoom: 9  },                                                                               // GOM offshore buffer — Thunder Horse PDQ (no DEM)
+  // Permian fields — Delaware Basin well pad grid, Reeves/Loving Co.
+  {
+    center: [31.47, -103.74], zoom: 11,
+    overlays: [
+      { bounds: [[31.35, -104.05], [31.60, -103.45]], color: '#ff4444', label: 'Delaware Basin — dense well pad cluster (highest ERCOT exposure)', fillOpacity: 0.30 },
+      { bounds: [[31.15, -103.60], [31.38, -103.10]], color: '#ffcc00', label: 'Secondary drilling block — active completions', fillOpacity: 0.22 },
+      { bounds: [[31.55, -103.85], [31.75, -103.40]], color: '#ffcc00', label: 'Gathering pipeline corridor', fillOpacity: 0.18 },
+    ],
+  },
+  // Midstream egress — Waha Hub, Pecos County TX
+  {
+    center: [30.92, -102.47], zoom: 10,
+    overlays: [
+      { bounds: [[30.85, -102.62], [30.99, -102.33]], color: '#ff4444', label: 'Waha Hub — compressor/processing cluster (bottleneck epicentre)', fillOpacity: 0.30 },
+      { bounds: [[30.65, -102.90], [31.15, -102.05]], color: '#ffcc00', label: 'Pipeline convergence zone — capacity constraint area', fillOpacity: 0.20 },
+      { bounds: [[30.35, -102.10], [30.72, -101.45]], color: '#44dd88', label: 'Downstream takeaway capacity — partially relieved', fillOpacity: 0.16 },
+    ],
+  },
+  // GOM offshore buffer — Thunder Horse PDQ, Mississippi Canyon 778/822
+  {
+    center: [28.17, -88.49], zoom: 9,
+    overlays: [
+      { bounds: [[28.10, -88.58], [28.24, -88.40]], color: '#ff4444', label: 'Thunder Horse PDQ — 60–80 Kbbl/day deepwater semi-submersible', fillOpacity: 0.35 },
+      { bounds: [[27.70, -89.30], [28.60, -87.70]], color: '#ffcc00', label: 'Mississippi Canyon production field — Cat 3+ hurricane track zone', fillOpacity: 0.18 },
+      { bounds: [[26.80, -90.80], [29.50, -86.50]], color: '#44dd88', label: 'GOM offshore buffer — 847 platform-day downtime exposure 2010–2023', fillOpacity: 0.10 },
+    ],
+  },
 ];
 
-const _LEMMING_DEM = getMediaUrl('lemming', 'artifacts/hardangervidda_lemming_habitat_dem_30m.tif');
 const LEMMING_STEP_FOCUSES: MapFocus[] = [
-  { center: [70.3, 28.0],  zoom: 5, tiffUrl: _LEMMING_DEM },
-  { center: [70.1, 27.5],  zoom: 5, tiffUrl: _LEMMING_DEM },
-  { center: [70.5, 26.0],  zoom: 5, tiffUrl: _LEMMING_DEM },
-  { center: [70.0, 25.0],  zoom: 5, tiffUrl: _LEMMING_DEM },
-  { center: [69.8, 26.5],  zoom: 5, tiffUrl: _LEMMING_DEM },
+  {
+    center: [70.3, 28.0], zoom: 5,
+    overlays: [
+      { bounds: [[69.2, 25.5], [70.8, 30.0]], color: '#ff4444', label: 'Peak crash zone — Finnmark plateau, highest population collapse risk', fillOpacity: 0.25 },
+      { bounds: [[70.5, 22.0], [71.8, 27.0]], color: '#ffcc00', label: 'Secondary habitat stress — snow crust formation area', fillOpacity: 0.18 },
+    ],
+  },
+  {
+    center: [70.1, 27.5], zoom: 5,
+    overlays: [
+      { bounds: [[69.5, 24.0], [70.5, 29.0]], color: '#ff4444', label: 'Core lemming habitat — high density breeding grounds', fillOpacity: 0.25 },
+      { bounds: [[69.0, 27.0], [70.0, 31.0]], color: '#44dd88', label: 'Migration corridor — eastward dispersal route', fillOpacity: 0.18 },
+    ],
+  },
+  {
+    center: [70.5, 26.0], zoom: 5,
+    overlays: [
+      { bounds: [[70.0, 23.0], [71.5, 27.5]], color: '#ffcc00', label: 'Predator range overlap — arctic fox & rough-legged buzzard pressure', fillOpacity: 0.22 },
+      { bounds: [[69.5, 25.0], [70.2, 28.5]], color: '#ff4444', label: 'Climate sensitivity zone — warming trend impact area', fillOpacity: 0.25 },
+    ],
+  },
+  { center: [70.0, 25.0], zoom: 5 },
+  { center: [69.8, 26.5], zoom: 5 },
 ];
-
-const _PERMIAN_DEM = getMediaUrl('oil', 'artifacts/permian_basin_midland_dem_30m.tif');
-const _CUSHING_DEM = getMediaUrl('oil', 'artifacts/cushing_oklahoma_dem_30m.tif');
 
 const OIL_SECTION_LOCATIONS: Record<string, MapFocus> = {
-  'risk-vector-1-power-infrastructure-failure':          { center: [31.47, -103.74], zoom: 11, tiffUrl: _PERMIAN_DEM },
-  'risk-vector-2-subsurface-pressure-zombie-well-crisis':{ center: [31.47, -103.74], zoom: 10, tiffUrl: _PERMIAN_DEM },
-  'risk-vector-3-gas-pipeline-bottleneck-waha-hub':      { center: [30.92, -102.47], zoom: 10, tiffUrl: _PERMIAN_DEM },
-  'compounding-risk-assessment':                         { center: [31.1,  -103.0],  zoom: 8,  tiffUrl: _PERMIAN_DEM },
-  'production-impact-scenarios':                         { center: [31.1,  -103.0],  zoom: 7,  tiffUrl: _PERMIAN_DEM },
-  'data-sources':                                        { center: [30.0,  -97.0],   zoom: 6,  tiffUrl: _CUSHING_DEM },
+  'permian-field-operations': { center: [31.47, -103.74], zoom: 10 },
+  'midstream-egress':         { center: [30.92, -102.47], zoom: 8  },
+  'gom-offshore-buffer':      { center: [28.17, -88.49],  zoom: 8  },
+  'compounding-risk-assessment': { center: [31.1,  -103.0],  zoom: 7  },
+  'production-impact-scenarios': { center: [31.1,  -103.0],  zoom: 6  },
+  'data-sources':                { center: [30.0,  -97.0],   zoom: 6  },
 };
 
 function getStepFocus(mapType: BusinessMapType, stepPosition: number): MapFocus | null {
@@ -80,6 +120,7 @@ export default function App() {
   const [decomposeError, setDecomposeError] = useState<string | null>(null);
 
   const [globalDepth, setGlobalDepth] = useState<Depth>(2);
+  const [globalModel, setGlobalModel] = useState('claude-sonnet-4-6');
   const [totalTokens, setTotalTokens] = useState(0);
 
   const [selectedStepId, setSelectedStepId] = useState<string | null>(null);
@@ -162,6 +203,35 @@ export default function App() {
       { tokens: N * 200_000, uncertainty: initialUnc * 0.08 },
     ];
   }, [tokenHistory, steps]);
+
+  // Section slug → step index for the oil scenario
+  const OIL_SECTION_STEP_IDX: Record<string, number> = {
+    'permian-field-operations': 0,
+    'midstream-egress': 1,
+    'gom-offshore-buffer': 2,
+  };
+
+  const sectionMetrics = useMemo((): Record<string, SectionMetric> => {
+    if (mapType !== 'oil' || steps.length === 0) return {};
+    const result: Record<string, SectionMetric> = {};
+    for (const [slug, idx] of Object.entries(OIL_SECTION_STEP_IDX)) {
+      const step = steps[idx];
+      if (!step) continue;
+      const analyzedRfs = step.risk_factors.filter((rf) => analysisResults[rf.id]);
+      const isAnalyzed = analyzedRfs.length > 0;
+      const metrics = isAnalyzed
+        ? analyzedRfs.map((rf) => analysisResults[rf.id].metrics)
+        : step.risk_factors.filter((rf) => rf.initial_metrics).map((rf) => rf.initial_metrics!);
+      if (metrics.length === 0) continue;
+      result[slug] = {
+        failureRate: metrics.reduce((s, m) => s + m.failure_rate, 0) / metrics.length,
+        lossLow:     metrics.reduce((s, m) => s + m.loss_range_low,  0),
+        lossHigh:    metrics.reduce((s, m) => s + m.loss_range_high, 0),
+        isAnalyzed,
+      };
+    }
+    return result;
+  }, [mapType, steps, analysisResults]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Decompose ──────────────────────────────────────────────────────────────
 
@@ -284,6 +354,7 @@ export default function App() {
         step_context: `${step.name} — ${step.description}`,
         depth,
         data_domains: ['oil', 'lemming', 'geo', 'shared'],
+        model: globalModel,
         feedback,
       })) {
         if (ac.signal.aborted) break;
@@ -347,7 +418,7 @@ export default function App() {
       setRunningRfIds((prev) => { const n = new Set(prev); n.delete(rfId); return n; });
       abortControllersRef.current.delete(rfId);
     }
-  }, [steps, riskFactorDepths, globalDepth, businessDescription]);
+  }, [steps, riskFactorDepths, globalDepth, globalModel, businessDescription]);
 
   // ── Run all ────────────────────────────────────────────────────────────────
 
@@ -438,6 +509,10 @@ export default function App() {
         businessName={businessName}
         totalTokens={totalTokens}
         kpis={kpis}
+        globalDepth={globalDepth}
+        onGlobalDepthChange={setGlobalDepth}
+        globalModel={globalModel}
+        onGlobalModelChange={setGlobalModel}
         onRunAll={handleRunAll}
         isRunningAll={isRunningAll}
         hasSteps={steps.length > 0}
@@ -476,6 +551,7 @@ export default function App() {
                   markdown={docMarkdown}
                   activeSectionId={activeDocSection}
                   sectionLocations={mapType === 'oil' ? OIL_SECTION_LOCATIONS : {}}
+                  sectionMetrics={sectionMetrics}
                   onSectionFocus={handleSectionFocus}
                 />
               ) : (
