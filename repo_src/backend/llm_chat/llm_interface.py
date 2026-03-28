@@ -109,9 +109,19 @@ async def ask_llm(
             print(f"Error calling Gemini API with model {model_to_use}: {e}")
             return f"Error: Failed to get response from Gemini. Details: {str(e)}"
 
-    # --- DO Gradient path ---
+    # --- DO Gradient path (with smart model routing) ---
     if gradient_client is not None:
-        model_to_use = model_override or DO_GRADIENT_DEFAULT_MODEL
+        if model_override:
+            model_to_use = model_override
+            route_reason = f"explicit override: {model_override}"
+        else:
+            try:
+                from repo_src.backend.services.model_router import route_model
+                model_to_use, route_reason = route_model(prompt_text, system_message)
+            except ImportError:
+                model_to_use = DO_GRADIENT_DEFAULT_MODEL
+                route_reason = "fallback (router not available)"
+        print(f"[model-router] → {model_to_use} ({route_reason})")
         try:
             messages = [
                 {"role": "system", "content": system_message},

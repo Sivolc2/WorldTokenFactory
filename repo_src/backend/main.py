@@ -101,9 +101,26 @@ async def sponsor_status():
         "assistant_ui": True,
     }
 
-# Example (commented out) CRUD endpoints would go here
-# You would typically put these in separate router files (e.g., in an `api` or `routers` directory)
-# and include them in the main app.
+@app.get("/api/models")
+async def list_gradient_models():
+    """List available DO Gradient models with routing metadata."""
+    from repo_src.backend.services.model_router import list_available_models
+    return {"models": list_available_models()}
+
+@app.post("/api/model-route")
+async def route_model_endpoint(request: dict):
+    """Preview which model the router would select for a given prompt."""
+    from repo_src.backend.services.model_router import route_model, detect_task_type, get_model_info
+    prompt = request.get("prompt", "")
+    system = request.get("system_message", "")
+    task_type = detect_task_type(prompt, system)
+    model_id, reason = route_model(prompt, system)
+    return {
+        "task_type": task_type,
+        "selected_model": model_id,
+        "reason": reason,
+        "model_info": get_model_info(model_id),
+    }
 
 if __name__ == "__main__":
     import uvicorn
