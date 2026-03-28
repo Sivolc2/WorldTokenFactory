@@ -129,6 +129,9 @@ export default function TokenEfficiencyChart({
         <div className="tec-legend">
           <span className="tec-leg tec-leg--forecast">forecast band</span>
           <span className="tec-leg tec-leg--live">actual band</span>
+          <span className="tec-leg tec-leg--reduced">reduced</span>
+          <span className="tec-leg tec-leg--neutral">neutral</span>
+          <span className="tec-leg tec-leg--increased">increased</span>
         </div>
       </div>
 
@@ -245,12 +248,15 @@ export default function TokenEfficiencyChart({
           {/* Live high dots — interactive */}
           {liveCurve.slice(1).map((p, i) => {
             const hasTooltip = !!(p.label || p.summary);
+            const prev = liveCurve[i]; // i+1 in full array, i in slice
+            const ratio = prev.high > 0 ? p.high / prev.high : 1;
+            const dotColor = ratio < 0.97 ? '#22c55e' : ratio > 1.01 ? '#ef4444' : '#3b82f6';
             return (
               <circle key={`h${i}`}
                 cx={toX(p.tokens).toFixed(1)}
                 cy={toY(p.high).toFixed(1)}
                 r={hasTooltip ? 5 : 4}
-                fill="var(--color-accent)"
+                fill={dotColor}
                 stroke={hasTooltip ? 'rgba(255,255,255,0.6)' : 'none'}
                 strokeWidth={hasTooltip ? 1.5 : 0}
                 style={{ cursor: hasTooltip ? (p.sectionId ? 'pointer' : 'default') : 'default' }}
@@ -268,13 +274,18 @@ export default function TokenEfficiencyChart({
           })}
 
           {/* Live low dots */}
-          {liveCurve.slice(1).map((p, i) => (
-            <circle key={`l${i}`}
-              cx={toX(p.tokens).toFixed(1)}
-              cy={toY(p.low).toFixed(1)}
-              r={3} fill="var(--color-accent)" opacity={0.6}
-            />
-          ))}
+          {liveCurve.slice(1).map((p, i) => {
+            const prev = liveCurve[i];
+            const ratio = prev.low > 0 ? p.low / prev.low : 1;
+            const dotColor = ratio < 0.97 ? '#22c55e' : ratio > 1.01 ? '#ef4444' : '#3b82f6';
+            return (
+              <circle key={`l${i}`}
+                cx={toX(p.tokens).toFixed(1)}
+                cy={toY(p.low).toFixed(1)}
+                r={3} fill={dotColor} opacity={0.6}
+              />
+            );
+          })}
 
           {/* Initial point dots */}
           {liveCurve.length >= 1 && (

@@ -42,6 +42,7 @@ from repo_src.backend.routers.railtracks_route import router as railtracks_route
 from repo_src.backend.routers.nexla_route import router as nexla_router
 from repo_src.backend.routers.orchestrator_route import router as orchestrator_router
 from repo_src.backend.routers.live_data_route import router as live_data_router
+from repo_src.backend.routers.autoresearch_route import router as autoresearch_router
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -78,6 +79,7 @@ app.include_router(railtracks_router)
 app.include_router(nexla_router)
 app.include_router(orchestrator_router)
 app.include_router(live_data_router)
+app.include_router(autoresearch_router)
 
 @app.get("/")
 async def read_root():

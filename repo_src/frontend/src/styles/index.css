@@ -635,6 +635,16 @@ textarea, input { font-family: inherit; }
   font-weight: 900;
 }
 
+.tec-leg--reduced::before,
+.tec-leg--neutral::before,
+.tec-leg--increased::before {
+  content: '●';
+  margin-right: 3px;
+}
+.tec-leg--reduced::before   { color: #22c55e; }
+.tec-leg--neutral::before   { color: #3b82f6; }
+.tec-leg--increased::before { color: #ef4444; }
+
 /* ─── CHART POINT TOOLTIP ─────────────────────────────────── */
 
 .tec-wrap {
