@@ -23,9 +23,9 @@ MODELS = {
 
     # Tier 3: Fast and efficient (quick tasks, high throughput)
     "llama3.3-70b-instruct":       {"tier": "fast",     "speed": "fast",   "cost": "low",    "strengths": ["general", "extraction", "classification"]},
-    "openai-gpt-5.4-mini":        {"tier": "fast",     "speed": "fast",   "cost": "low",    "strengths": ["general", "quick", "extraction"]},
+    "openai-gpt-5-mini":          {"tier": "fast",     "speed": "fast",   "cost": "low",    "strengths": ["general", "quick", "extraction"]},
     "anthropic-claude-haiku-4.5":  {"tier": "fast",     "speed": "fast",   "cost": "low",    "strengths": ["extraction", "classification", "quick"]},
-    "openai-gpt-5.4-nano":        {"tier": "fast",     "speed": "fastest", "cost": "lowest", "strengths": ["classification", "simple", "extraction"]},
+    "openai-gpt-5-nano":          {"tier": "fast",     "speed": "fastest", "cost": "lowest", "strengths": ["classification", "simple", "extraction"]},
     "deepseek-r1-distill-llama-70b": {"tier": "fast",   "speed": "fast",   "cost": "low",    "strengths": ["reasoning", "math", "code"]},
 
     # Tier 4: Specialized
@@ -126,7 +126,7 @@ def route_model(
 
     # Default: chat / general
     if prefer_speed:
-        return "openai-gpt-5.4-nano", f"chat (speed): ultra-fast for conversational responses"
+        return "openai-gpt-5-nano", f"chat (speed): ultra-fast for conversational responses"
     if prefer_quality:
         return "anthropic-claude-4.6-sonnet", f"chat (quality): best general-purpose for rich responses"
     return "llama3.3-70b-instruct", f"chat: good balance of speed + quality for general conversation"

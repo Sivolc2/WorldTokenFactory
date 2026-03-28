@@ -14,6 +14,9 @@ services:
     instance_count: 1
     instance_size_slug: apps-s-1vcpu-0.5gb
     envs:
+      - key: DIGITAL_OCEAN_MODEL_ACCESS_KEY
+        scope: RUN_TIME
+        type: SECRET
       - key: GEMINI_API_KEY
         scope: RUN_TIME
         type: SECRET

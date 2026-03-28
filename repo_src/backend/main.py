@@ -91,6 +91,7 @@ async def read_hello():
 async def sponsor_status():
     """Check which sponsor tool integrations are active."""
     from repo_src.backend.agents.railtracks_orchestrator import RAILTRACKS_AVAILABLE
+    from repo_src.backend.services.augment_service import check_augment_status
     return {
         "gemini": bool(os.getenv("GEMINI_API_KEY")),
         "openrouter": bool(os.getenv("OPENROUTER_API_KEY")),
@@ -99,7 +100,7 @@ async def sponsor_status():
         "nexla": bool(os.getenv("NEXLA_TOKEN")),
         "railtracks": RAILTRACKS_AVAILABLE,
         "digitalocean": True,
-        "augment": True,
+        "augment": check_augment_status(),
         "assistant_ui": True,
     }
 
@@ -203,7 +204,7 @@ async def senso_ingest_all():
             r = await client.post(
                 "https://apiv2.senso.ai/api/v1/org/kb/raw",
                 headers={"X-API-Key": senso_key, "Content-Type": "application/json"},
-                json={"title": title, "text": text},
+                json={"title": title, "content": text},
             )
             results.append({
                 "file": str(md_file.relative_to(data_root)),
@@ -213,6 +214,27 @@ async def senso_ingest_all():
             })
 
     return {"ingested": len(results), "results": results}
+
+
+@app.post("/api/senso/configure-brand")
+async def senso_configure_brand():
+    """Configure the Senso Brand Kit with the World Token Factory risk analyst persona."""
+    from repo_src.backend.services.senso_service import senso_configure_brand_kit
+    return await senso_configure_brand_kit()
+
+
+@app.post("/api/senso/create-content-type")
+async def senso_create_content_type():
+    """Create a RiskToken content type in Senso for structured output."""
+    from repo_src.backend.services.senso_service import senso_create_risk_token_content_type
+    return await senso_create_risk_token_content_type()
+
+
+@app.post("/api/augment/search")
+async def augment_search(request: dict):
+    """Use Augment Context Engine to semantically search the codebase."""
+    from repo_src.backend.services.augment_service import augment_search_codebase
+    return await augment_search_codebase(request.get("query", ""))
 
 
 if __name__ == "__main__":

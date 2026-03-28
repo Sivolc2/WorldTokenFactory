@@ -38,10 +38,16 @@ def check_systems() -> dict:
         "gradient": bool(os.getenv("DIGITAL_OCEAN_MODEL_ACCESS_KEY")),
         "railtracks": False,
         "multimodal": gemini_client is not None,
+        "augment": False,
     }
     try:
         from repo_src.backend.agents.railtracks_orchestrator import RAILTRACKS_AVAILABLE
         systems["railtracks"] = RAILTRACKS_AVAILABLE
+    except ImportError:
+        pass
+    try:
+        from repo_src.backend.services.augment_service import AUGMENT_AVAILABLE
+        systems["augment"] = AUGMENT_AVAILABLE
     except ImportError:
         pass
     return systems
@@ -106,6 +112,21 @@ async def fetch_nexla_flows() -> dict:
     except Exception as e:
         return {"source": "nexla", "status": "error", "error": str(e)}
     return {"source": "nexla", "status": "error"}
+
+
+async def fetch_augment_context(query: str) -> dict:
+    """Use Augment Context Engine to retrieve semantically relevant codebase context."""
+    try:
+        from repo_src.backend.services.augment_service import augment_search_codebase
+        result = await augment_search_codebase(query)
+        result["source"] = "augment"
+        if "error" not in result:
+            result["status"] = "ok"
+        else:
+            result["status"] = "unavailable"
+        return result
+    except Exception as e:
+        return {"source": "augment", "status": "error", "error": str(e)}
 
 
 def get_local_evidence(domain: str, risk_factor: str) -> dict:
@@ -217,6 +238,12 @@ async def orchestrate_risk_assessment(
     if systems["nexla"]:
         tasks["nexla"] = asyncio.create_task(fetch_nexla_flows())
 
+    # Augment Context Engine — semantic codebase/data retrieval
+    if systems["augment"]:
+        tasks["augment"] = asyncio.create_task(
+            fetch_augment_context(f"{risk_factor_name} {step_name} {domain}")
+        )
+
     # Wait for all
     results = {}
     for name, task in tasks.items():
@@ -307,6 +334,13 @@ async def orchestrate_risk_assessment(
     if nexla.get("status") == "ok":
         flows = nexla.get("flows", {})
         evidence_sections.append(f"NEXLA DATA PIPELINES: {json.dumps(flows)[:500]}")
+
+    # Augment Context Engine
+    augment = results.get("augment", {})
+    if augment.get("status") == "ok":
+        augment_results = augment.get("results", "")
+        if augment_results:
+            evidence_sections.append(f"AUGMENT CONTEXT ENGINE:\n{str(augment_results)[:1000]}")
 
     all_evidence = "\n\n".join(evidence_sections)
 
