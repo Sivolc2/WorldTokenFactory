@@ -1,185 +1,250 @@
 /**
  * ChatPanel — assistant-ui powered chat interface for World Token Factory.
- * Provides a conversational interface to the risk assessment engine.
+ * Uses AssistantRuntimeProvider + useLocalRuntime + Thread from @assistant-ui/react(-ui).
+ * makeAssistantToolUI renders inline risk cards for tool calls.
  */
-import { useState, useCallback } from 'react';
+
+import {
+  AssistantRuntimeProvider,
+  useLocalRuntime,
+  makeAssistantToolUI,
+  type ChatModelAdapter,
+} from '@assistant-ui/react';
+import {
+  Thread,
+  ThreadConfigProvider,
+  type ThreadConfig,
+} from '@assistant-ui/react-ui';
+import '@assistant-ui/react-ui/styles/index.css';
 import { setApiKey } from '../api';
 
 // Expose setApiKey so callers can pass in an Unkey key
 export { setApiKey };
 
-// Type-safe wrapper that works with or without assistant-ui installed
-interface ChatMessage {
-  id: string;
-  role: 'user' | 'assistant';
-  content: string;
-  timestamp: Date;
-}
+const API_BASE =
+  (typeof import.meta !== 'undefined' && (import.meta as any).env?.VITE_API_URL) ||
+  'http://localhost:8000';
 
-const API_BASE = (typeof import.meta !== 'undefined' && (import.meta as any).env?.VITE_API_URL) || 'http://localhost:8000';
+// ── Adapter ───────────────────────────────────────────────────────────────────
+
+const wtfAdapter: ChatModelAdapter = {
+  async run({ messages, abortSignal }) {
+    // Build auth headers
+    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+    const storedKey =
+      typeof localStorage !== 'undefined' ? localStorage.getItem('wtf_api_key') : null;
+    if (storedKey) headers['X-API-Key'] = storedKey;
+
+    // Find the last user message
+    const lastUser = [...messages].reverse().find(m => m.role === 'user');
+    const promptText =
+      lastUser?.content
+        .filter((p): p is { type: 'text'; text: string } => p.type === 'text')
+        .map(p => p.text)
+        .join(' ') ?? '';
+
+    const res = await fetch(`${API_BASE}/api/chat`, {
+      method: 'POST',
+      headers,
+      signal: abortSignal,
+      body: JSON.stringify({
+        prompt: promptText,
+        system_message:
+          "You are a World Token Factory risk analyst. Help users understand business risks by decomposing their business into risk factors. Be specific with numbers and evidence. If asked about a specific business, describe 3-5 key operational steps and their risk factors.",
+        max_tokens: 2048,
+        temperature: 0.3,
+      }),
+    });
+
+    if (!res.ok) {
+      const errText = await res.text().catch(() => res.statusText);
+      return {
+        content: [{ type: 'text', text: `Backend error (${res.status}): ${errText}` }],
+      };
+    }
+
+    const data = await res.json();
+    const text: string = data.response ?? data.message ?? JSON.stringify(data);
+
+    return {
+      content: [{ type: 'text', text }],
+    };
+  },
+};
+
+// ── makeAssistantToolUI — inline risk card ────────────────────────────────────
+
+const AssessRiskToolUI = makeAssistantToolUI<
+  { risk_factor_name: string; business_context?: string },
+  { failure_rate: number; uncertainty: number; loss_range_low: number; loss_range_high: number }
+>({
+  toolName: 'assess_risk',
+  render: ({ args, result, status }) => {
+    if (status.type === 'running') {
+      return (
+        <div style={styles.riskCard}>
+          <div style={styles.riskCardHeader}>
+            <span style={styles.riskPulse}>&#9679;</span>
+            <span style={{ fontWeight: 600 }}>
+              Analysing {args.risk_factor_name ?? 'risk factor'}…
+            </span>
+          </div>
+        </div>
+      );
+    }
+    if (status.type === 'complete' && result) {
+      const fr = (result.failure_rate * 100).toFixed(1);
+      const un = (result.uncertainty * 100).toFixed(1);
+      const low = result.loss_range_low.toLocaleString();
+      const high = result.loss_range_high.toLocaleString();
+      return (
+        <div style={styles.riskCard}>
+          <div style={styles.riskCardHeader}>
+            <span style={styles.riskDot}>&#9679;</span>
+            <span style={{ fontWeight: 700 }}>{args.risk_factor_name}</span>
+          </div>
+          <div style={styles.riskMetrics}>
+            <span style={styles.riskBadge}>FR {fr}%</span>
+            <span style={styles.riskBadgeAlt}>UN {un}%</span>
+            <span style={styles.riskRange}>
+              ${low} – ${high}
+            </span>
+          </div>
+        </div>
+      );
+    }
+    return null;
+  },
+});
+
+// ── Thread configuration ──────────────────────────────────────────────────────
+
+const threadConfig: ThreadConfig = {
+  assistantAvatar: { fallback: 'WTF' },
+  welcome: {
+    message: "Describe your business and I'll decompose it into risk factors.",
+    suggestions: [
+      { prompt: 'Gulf Coast oil pipeline operator' },
+      { prompt: 'Arctic lemming farm' },
+      { prompt: 'Urban drone delivery service' },
+    ],
+  },
+  tools: [AssessRiskToolUI],
+  assistantMessage: {
+    allowCopy: true,
+    allowReload: true,
+  },
+  composer: {
+    allowAttachments: false,
+  },
+};
+
+// ── Main component ────────────────────────────────────────────────────────────
 
 export default function ChatPanel() {
-  const [messages, setMessages] = useState<ChatMessage[]>([
-    {
-      id: '1',
-      role: 'assistant',
-      content: 'Welcome to World Token Factory. Describe your business and I\'ll decompose it into risk factors. Try: "Gulf Coast oil pipeline operator" or "Arctic lemming farm"',
-      timestamp: new Date(),
-    },
-  ]);
-  const [input, setInput] = useState('');
-  const [isLoading, setIsLoading] = useState(false);
-
-  const sendMessage = useCallback(async () => {
-    if (!input.trim() || isLoading) return;
-
-    const userMsg: ChatMessage = {
-      id: Date.now().toString(),
-      role: 'user',
-      content: input.trim(),
-      timestamp: new Date(),
-    };
-    setMessages(prev => [...prev, userMsg]);
-    setInput('');
-    setIsLoading(true);
-
-    try {
-      // Build auth headers inline (mirrors api.ts authHeaders for the chat endpoint)
-      const chatHeaders: Record<string, string> = { 'Content-Type': 'application/json' };
-      const storedKey = typeof localStorage !== 'undefined' ? localStorage.getItem('wtf_api_key') : null;
-      if (storedKey) chatHeaders['X-API-Key'] = storedKey;
-
-      const res = await fetch(`${API_BASE}/api/chat`, {
-        method: 'POST',
-        headers: chatHeaders,
-        body: JSON.stringify({
-          prompt: userMsg.content,
-          system_message: "You are a World Token Factory risk analyst. Help users understand business risks by decomposing their business into risk factors. Be specific with numbers and evidence. If asked about a specific business, describe 3-5 key operational steps and their risk factors.",
-          max_tokens: 2048,
-          temperature: 0.3,
-        }),
-      });
-      const data = await res.json();
-
-      const assistantMsg: ChatMessage = {
-        id: (Date.now() + 1).toString(),
-        role: 'assistant',
-        content: data.response || data.message || JSON.stringify(data),
-        timestamp: new Date(),
-      };
-      setMessages(prev => [...prev, assistantMsg]);
-    } catch (_err) {
-      setMessages(prev => [...prev, {
-        id: (Date.now() + 1).toString(),
-        role: 'assistant',
-        content: `Connection error. Make sure the backend is running at ${API_BASE}`,
-        timestamp: new Date(),
-      }]);
-    } finally {
-      setIsLoading(false);
-    }
-  }, [input, isLoading]);
+  const runtime = useLocalRuntime(wtfAdapter);
 
   return (
-    <div className="chat-panel" style={{
-      display: 'flex',
-      flexDirection: 'column',
-      height: '100%',
-      background: 'var(--color-bg, #0a0a0f)',
-      color: 'var(--color-fg, #e0ffe0)',
-      fontFamily: 'Inter, system-ui, sans-serif',
-    }}>
-      <div style={{
-        padding: '12px 16px',
-        borderBottom: '1px solid rgba(0, 255, 136, 0.15)',
-        fontSize: '14px',
-        fontWeight: 600,
-        letterSpacing: '0.05em',
-        textTransform: 'uppercase',
-        color: 'var(--color-accent, #00ff88)',
-      }}>
-        Risk Assessment Chat
+    <AssistantRuntimeProvider runtime={runtime}>
+      <div className="chat-panel" style={styles.container}>
+        <div style={styles.header}>Risk Assessment Chat</div>
+        <div style={styles.threadWrapper}>
+          <ThreadConfigProvider config={threadConfig}>
+            <Thread />
+          </ThreadConfigProvider>
+        </div>
       </div>
-
-      <div style={{
-        flex: 1,
-        overflowY: 'auto',
-        padding: '16px',
-        display: 'flex',
-        flexDirection: 'column',
-        gap: '12px',
-      }}>
-        {messages.map(msg => (
-          <div key={msg.id} style={{
-            padding: '10px 14px',
-            borderRadius: '8px',
-            background: msg.role === 'user'
-              ? 'rgba(0, 255, 136, 0.08)'
-              : 'rgba(255, 255, 255, 0.04)',
-            border: msg.role === 'user'
-              ? '1px solid rgba(0, 255, 136, 0.2)'
-              : '1px solid rgba(255, 255, 255, 0.06)',
-            alignSelf: msg.role === 'user' ? 'flex-end' : 'flex-start',
-            maxWidth: '85%',
-            fontSize: '14px',
-            lineHeight: 1.5,
-            whiteSpace: 'pre-wrap',
-          }}>
-            {msg.content}
-          </div>
-        ))}
-        {isLoading && (
-          <div style={{
-            padding: '10px 14px',
-            color: 'var(--color-accent, #00ff88)',
-            fontSize: '13px',
-            opacity: 0.7,
-          }}>
-            Analysing...
-          </div>
-        )}
-      </div>
-
-      <div style={{
-        padding: '12px 16px',
-        borderTop: '1px solid rgba(0, 255, 136, 0.15)',
-        display: 'flex',
-        gap: '8px',
-      }}>
-        <input
-          value={input}
-          onChange={e => setInput(e.target.value)}
-          onKeyDown={e => e.key === 'Enter' && sendMessage()}
-          placeholder="Describe your business or ask about risks..."
-          style={{
-            flex: 1,
-            padding: '10px 14px',
-            background: 'rgba(255, 255, 255, 0.04)',
-            border: '1px solid rgba(0, 255, 136, 0.2)',
-            borderRadius: '6px',
-            color: 'var(--color-fg, #e0ffe0)',
-            fontSize: '14px',
-            outline: 'none',
-          }}
-        />
-        <button
-          onClick={sendMessage}
-          disabled={isLoading || !input.trim()}
-          style={{
-            padding: '10px 20px',
-            background: 'var(--color-accent, #00ff88)',
-            color: '#0a0a0f',
-            border: 'none',
-            borderRadius: '6px',
-            fontWeight: 600,
-            fontSize: '14px',
-            cursor: 'pointer',
-            opacity: isLoading || !input.trim() ? 0.5 : 1,
-          }}
-        >
-          Send
-        </button>
-      </div>
-    </div>
+    </AssistantRuntimeProvider>
   );
 }
+
+// ── Styles ────────────────────────────────────────────────────────────────────
+
+const styles = {
+  container: {
+    display: 'flex',
+    flexDirection: 'column' as const,
+    height: '100%',
+    background: 'var(--color-bg, #0a0a0f)',
+    color: 'var(--color-fg, #e0ffe0)',
+    fontFamily: 'Inter, system-ui, sans-serif',
+  },
+  header: {
+    padding: '12px 16px',
+    borderBottom: '1px solid rgba(0, 255, 136, 0.15)',
+    fontSize: '14px',
+    fontWeight: 600 as const,
+    letterSpacing: '0.05em',
+    textTransform: 'uppercase' as const,
+    color: 'var(--color-accent, #00ff88)',
+    flexShrink: 0,
+  },
+  threadWrapper: {
+    flex: 1,
+    minHeight: 0,
+    display: 'flex',
+    flexDirection: 'column' as const,
+    // assistant-ui CSS variable overrides for green-on-black aesthetic
+    ['--aui-color-primary' as string]: '#00ff88',
+    ['--aui-color-primary-foreground' as string]: '#0a0a0f',
+    ['--aui-color-background' as string]: '#0a0a0f',
+    ['--aui-color-foreground' as string]: '#e0ffe0',
+    ['--aui-color-muted' as string]: 'rgba(255,255,255,0.06)',
+    ['--aui-color-muted-foreground' as string]: '#94a3b8',
+    ['--aui-color-border' as string]: 'rgba(0,255,136,0.15)',
+    ['--aui-border-radius' as string]: '8px',
+  },
+  riskCard: {
+    padding: '10px 14px',
+    borderRadius: '8px',
+    border: '1px solid rgba(0,255,136,0.25)',
+    background: 'rgba(0,255,136,0.04)',
+    margin: '6px 0',
+    fontFamily: 'Inter, system-ui, sans-serif',
+    fontSize: '13px',
+  },
+  riskCardHeader: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '8px',
+    marginBottom: '6px',
+  },
+  riskPulse: {
+    color: '#00ff88',
+    animation: 'pulse 1.5s ease-in-out infinite',
+    fontSize: '10px',
+  },
+  riskDot: {
+    color: '#00ff88',
+    fontSize: '10px',
+  },
+  riskMetrics: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '8px',
+    flexWrap: 'wrap' as const,
+  },
+  riskBadge: {
+    padding: '2px 8px',
+    borderRadius: '4px',
+    background: 'rgba(0,255,136,0.15)',
+    color: '#00ff88',
+    fontWeight: 600 as const,
+    fontSize: '12px',
+    fontFamily: 'monospace',
+  },
+  riskBadgeAlt: {
+    padding: '2px 8px',
+    borderRadius: '4px',
+    background: 'rgba(255,200,0,0.12)',
+    color: '#ffc800',
+    fontWeight: 600 as const,
+    fontSize: '12px',
+    fontFamily: 'monospace',
+  },
+  riskRange: {
+    color: '#94a3b8',
+    fontSize: '12px',
+    fontFamily: 'monospace',
+  },
+};
