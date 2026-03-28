@@ -31,7 +31,7 @@ OIL_RF_IDS = {
 
 _PERMIAN_BRIEF   = _a("permian_basin_risk_brief.md", "oil", "document",
                        "Three active Permian risk vectors: ERCOT grid, zombie well pressure, Waha pipeline bottleneck")
-_PERMIAN_DEM     = _a("artifacts/permian_basin_midland_dem_30m.tif", "oil", "map",
+_PERMIAN_DEM     = _a("artifacts/permian_basin_midland_dem_30m.tif", "oil", "image",
                        "Copernicus 30m DEM — Delaware Basin / western Permian; pipeline and well infrastructure terrain")
 _PERMIAN_VIDEO   = _a("artifacts/permian_power_grid_risk.mkv", "oil", "video",
                        "ERCOT reliability analysis for Permian Basin field operations — power buildout delay risk")
@@ -45,7 +45,7 @@ _HURRICANE       = _a("offshore_hurricane_exposure.md", "oil", "document",
                        "Cat 3+ platform exposure: 847 platform-days downtime 2010–2023, insurance deductibles, 3 high-risk assets")
 _COMPLIANCE      = _a("regulatory_compliance_2022.md", "oil", "document",
                        "$420K 2020 PHMSA penalty; 4 BSEE SEMS findings (2 critical); open consent decree risk")
-_CUSHING_DEM     = _a("artifacts/cushing_oklahoma_dem_30m.tif", "oil", "map",
+_CUSHING_DEM     = _a("artifacts/cushing_oklahoma_dem_30m.tif", "oil", "image",
                        "Copernicus 30m DEM — Cushing, OK; terrain around the 94M-barrel pipeline crossroads hub")
 _CSB_VIDEO       = _a("artifacts/csb_bp_texas_city_anatomy_of_disaster.mp4", "oil", "video",
                        "CSB root-cause analysis of BP Texas City refinery explosion — process safety and failure chain benchmark")
