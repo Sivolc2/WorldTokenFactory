@@ -1,0 +1,38 @@
+{
+  "name": "demo-video",
+  "version": "1.0.0",
+  "description": "World Token Factory — 3-minute action trailer (Remotion)",
+  "scripts": {
+    "dev": "npx remotion studio src/index.ts",
+    "render": "npx remotion render src/index.ts Main out/demo.mp4",
+    "render:scene1": "npx remotion render src/index.ts Scene1-Title out/scene1.mp4",
+    "render:scene2": "npx remotion render src/index.ts Scene2-Problem out/scene2.mp4",
+    "render:scene3": "npx remotion render src/index.ts Scene3-Solution out/scene3.mp4",
+    "render:scene4": "npx remotion render src/index.ts Scene4-Orchestration out/scene4.mp4",
+    "render:scene5": "npx remotion render src/index.ts Scene5-RiskMap out/scene5.mp4",
+    "render:scene6": "npx remotion render src/index.ts Scene6-AgentThread out/scene6.mp4",
+    "render:scene7": "npx remotion render src/index.ts Scene7-TechStack out/scene7.mp4",
+    "render:scene8": "npx remotion render src/index.ts Scene8-CTA out/scene8.mp4",
+    "render:fast": "npx remotion render src/index.ts Main out/demo.mp4 --concurrency=4 --codec=h264"
+  },
+  "keywords": [
+    "remotion",
+    "video",
+    "world-token-factory"
+  ],
+  "license": "ISC",
+  "dependencies": {
+    "@remotion/cli": "^4.0.441",
+    "react": "^19.2.4",
+    "react-dom": "^19.2.4",
+    "remotion": "^4.0.441"
+  },
+  "devDependencies": {
+    "@types/react": "^19.2.14",
+    "@types/react-dom": "^19.2.3",
+    "typescript": "^5.9.3"
+  },
+  "remotion": {
+    "entryPoint": "./src/index.ts"
+  }
+}
