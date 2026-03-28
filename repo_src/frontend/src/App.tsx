@@ -108,7 +108,7 @@ export default function App() {
 
   // ── Analyse ────────────────────────────────────────────────────────────────
 
-  const handleAnalyse = useCallback(async (rfId: string) => {
+  const handleAnalyse = useCallback(async (rfId: string, feedback?: string) => {
     let rf = null, step = null;
     for (const s of steps) {
       const found = s.risk_factors.find((r) => r.id === rfId);
@@ -187,6 +187,7 @@ export default function App() {
         step_context: `${step.name} — ${step.description}`,
         depth,
         data_domains: ['oil', 'lemming', 'geo', 'shared'],
+        feedback,
       })) {
         if (ac.signal.aborted) break;
         switch (event.event) {
@@ -266,6 +267,25 @@ export default function App() {
     if (step?.risk_factors.length) setSelectedRfId(step.risk_factors[0].id);
   }, [steps]);
 
+  // ── Back / reset ──────────────────────────────────────────────────────────
+
+  const handleBack = useCallback(() => {
+    abortControllersRef.current.forEach((ac) => ac.abort());
+    abortControllersRef.current.clear();
+    setScreen('input');
+    setSteps([]);
+    setBusinessName('');
+    setBusinessDescription('');
+    setSelectedStepId(null);
+    setSelectedRfId(null);
+    setAnalysisResults({});
+    setRiskFactorDepths({});
+    setRunningRfIds(new Set());
+    setAgentThread(null);
+    setTotalTokens(0);
+    setDecomposeError(null);
+  }, []);
+
   // ── Derived ────────────────────────────────────────────────────────────────
 
   const selectedStep = steps.find((s) => s.id === selectedStepId) ?? null;
@@ -282,6 +302,7 @@ export default function App() {
         onRunAll={handleRunAll}
         isRunningAll={isRunningAll}
         hasSteps={steps.length > 0}
+        onBack={screen === 'main' ? handleBack : undefined}
       />
 
       {screen === 'input' || (steps.length === 0 && !isDecomposing) ? (
@@ -342,7 +363,7 @@ export default function App() {
             agentThread={agentThread}
             depth={selectedRf ? (riskFactorDepths[selectedRf.id] ?? globalDepth) : globalDepth}
             onDepthChange={(rfId, d) => setRiskFactorDepths((prev) => ({ ...prev, [rfId]: d }))}
-            onAnalyse={handleAnalyse}
+            onAnalyse={(rfId, feedback) => handleAnalyse(rfId, feedback)}
           />
         </div>
       )}

@@ -38,6 +38,7 @@ async def analyse_depth2(
     business_context: str,
     step_context: str,
     data_domains: list[str],
+    feedback: str | None = None,
 ) -> AsyncGenerator[dict, None]:
     # Step 1: run depth-1 to get candidate files
     artifacts_from_d1 = []
@@ -75,10 +76,15 @@ async def analyse_depth2(
             for domain, fname, content in doc_chunks
         )
 
+    feedback_section = (
+        f"\nUser feedback on the previous analysis (address these concerns):\n{feedback}\n"
+        if feedback else ""
+    )
     prompt = (
         f"Risk Factor: {risk_factor_name}\n"
         f"Business Context: {business_context}\n"
-        f"Step Context: {step_context}\n\n"
+        f"Step Context: {step_context}\n"
+        f"{feedback_section}\n"
         f"Source Documents:\n{docs_text}"
     )
 

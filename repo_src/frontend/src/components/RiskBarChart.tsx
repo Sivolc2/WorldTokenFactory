@@ -1,11 +1,6 @@
-import type { RiskFactor, AnalysisResult } from '../types';
-import { riskBarColor, riskScoreToColor } from '../utils/risk';
-import { formatPct } from '../utils/formatting';
-
-// Prior estimates shown for unanalysed factors (mirrors StepChainOverlay)
-const PRIOR_UN = 0.78;
-const PRIOR_FR = 0.20;
-const PRIOR_SCORE = (PRIOR_UN + PRIOR_FR) / 2;
+import type { RiskFactor, AnalysisResult, RiskMetrics } from '../types';
+import { riskScoreToColor } from '../utils/risk';
+import { formatUSD, formatTokens } from '../utils/formatting';
 
 interface RiskBarChartProps {
   riskFactors: RiskFactor[];
@@ -15,6 +10,54 @@ interface RiskBarChartProps {
   onSelect: (rfId: string) => void;
 }
 
+/** Derives a failure-rate range [low, high] from a point estimate + uncertainty. */
+function frRange(fr: number, un: number): [number, number] {
+  const low  = Math.max(0,    fr * (1 - un));
+  const high = Math.min(1, fr + (1 - fr) * un * 0.6);
+  return [low, high];
+}
+
+function fmtPct(v: number) { return `${Math.round(v * 100)}%`; }
+
+function ExposureBar({
+  metrics,
+  maxLoss,
+  isInitial = false,
+}: {
+  metrics: RiskMetrics;
+  maxLoss: number;
+  isInitial?: boolean;
+}) {
+  const scale   = maxLoss > 0 ? maxLoss : 1;
+  const lowPct  = (metrics.loss_range_low  / scale) * 100;
+  const highPct = (metrics.loss_range_high / scale) * 100;
+  const midPct  = (lowPct + highPct) / 2;
+  const score   = (metrics.failure_rate + metrics.uncertainty) / 2;
+  const color   = riskScoreToColor(score);
+  const [frLow, frHigh] = frRange(metrics.failure_rate, metrics.uncertainty);
+
+  return (
+    <div className={`rbc-exposure-row${isInitial ? ' rbc-exposure-row--initial' : ''}`}>
+      <div className="rbc-bar-track">
+        <div className="rbc-bar-fill rbc-bar-fill--floor"
+          style={{ width: `${lowPct}%`, background: color }} />
+        <div className="rbc-bar-fill rbc-bar-fill--range"
+          style={{ left: `${lowPct}%`, width: `${highPct - lowPct}%`, background: color }} />
+        <div className="rbc-bar-marker"
+          style={{ left: `${midPct}%`, background: color }} />
+      </div>
+      <div className="rbc-side-labels">
+        <span className={`rbc-exposure-val${isInitial ? ' rbc-exposure-val--initial' : ''}`}>
+          {isInitial && '~'}{formatUSD(metrics.loss_range_low)}–{formatUSD(metrics.loss_range_high)}
+        </span>
+        <span className={`rbc-fr-range${isInitial ? ' rbc-fr-range--initial' : ''}`}>
+          {isInitial && '~'}{fmtPct(frLow)}–{fmtPct(frHigh)} FR
+        </span>
+      </div>
+    </div>
+  );
+}
+
 export default function RiskBarChart({
   riskFactors,
   analysisResults,
@@ -22,30 +65,35 @@ export default function RiskBarChart({
   selectedRfId,
   onSelect,
 }: RiskBarChartProps) {
+  // Shared scale: max loss_range_high across all factors with any metrics
+  const maxLoss = riskFactors.reduce((m, rf) => {
+    const r = analysisResults[rf.id];
+    const hi = r?.metrics.loss_range_high ?? rf.initial_metrics?.loss_range_high ?? 0;
+    return Math.max(m, hi);
+  }, 0);
+
   return (
     <div className="rbc">
       {riskFactors.map((rf) => {
-        const result = analysisResults[rf.id];
-        const isRunning = runningRiskFactorIds.has(rf.id);
+        const result     = analysisResults[rf.id];
+        const isRunning  = runningRiskFactorIds.has(rf.id);
         const isSelected = rf.id === selectedRfId;
-        const isPrior = !result && !isRunning;
-
-        const score = result
-          ? (result.metrics.failure_rate + result.metrics.uncertainty) / 2
-          : PRIOR_SCORE;
-        const fr = result ? result.metrics.failure_rate : PRIOR_FR;
-        const un = result ? result.metrics.uncertainty : PRIOR_UN;
-        const combinedColor = riskScoreToColor(score);
+        const metrics    = result?.metrics ?? rf.initial_metrics;
+        const isInitial  = !result && !!rf.initial_metrics;
 
         return (
           <button
             key={rf.id}
-            className={`rbc-row${isSelected ? ' rbc-row--selected' : ''}${isPrior ? ' rbc-row--prior' : ''}`}
+            className={`rbc-row${isSelected ? ' rbc-row--selected' : ''}${isInitial ? ' rbc-row--initial' : ''}`}
             onClick={() => onSelect(rf.id)}
           >
-            <div className="rbc-label" title={rf.name}>
-              {rf.name}
-              {isPrior && <span className="rbc-prior-badge">prior</span>}
+            <div className="rbc-header">
+              <span className="rbc-label" title={rf.name}>{rf.name}</span>
+              {result && (
+                <span className="rbc-token-badge">
+                  {formatTokens(result.tokens_used)} tok
+                </span>
+              )}
             </div>
 
             {isRunning ? (
@@ -55,57 +103,10 @@ export default function RiskBarChart({
                 </span>
                 <span>Analysing…</span>
               </div>
+            ) : metrics ? (
+              <ExposureBar metrics={metrics} maxLoss={maxLoss} isInitial={isInitial} />
             ) : (
-              <div className="rbc-bars">
-                {/* Combined score — primary breakdown bar */}
-                <div className="rbc-bar-line rbc-bar-line--combined">
-                  <span className="rbc-bar-tag rbc-bar-tag--combined" style={{ color: combinedColor }}>
-                    {isPrior ? '~' : ''}⬤
-                  </span>
-                  <div className="rbc-bar-track">
-                    <div
-                      className="rbc-bar-fill"
-                      style={{
-                        width: `${score * 100}%`,
-                        background: combinedColor,
-                        opacity: isPrior ? 0.45 : 1,
-                      }}
-                    />
-                  </div>
-                  <span className="rbc-bar-val" style={{ color: combinedColor }}>
-                    {isPrior ? '~' : ''}{formatPct(score)}
-                  </span>
-                </div>
-                {/* Sub-bars: FR and UN */}
-                <div className="rbc-bar-line rbc-bar-line--sub">
-                  <span className="rbc-bar-tag">FR</span>
-                  <div className="rbc-bar-track">
-                    <div
-                      className="rbc-bar-fill"
-                      style={{
-                        width: `${fr * 100}%`,
-                        background: riskBarColor(fr),
-                        opacity: isPrior ? 0.35 : 0.85,
-                      }}
-                    />
-                  </div>
-                  <span className="rbc-bar-val">{isPrior ? '~' : ''}{formatPct(fr)}</span>
-                </div>
-                <div className="rbc-bar-line rbc-bar-line--sub">
-                  <span className="rbc-bar-tag">UN</span>
-                  <div className="rbc-bar-track">
-                    <div
-                      className="rbc-bar-fill"
-                      style={{
-                        width: `${un * 100}%`,
-                        background: riskBarColor(un),
-                        opacity: isPrior ? 0.35 : 0.65,
-                      }}
-                    />
-                  </div>
-                  <span className="rbc-bar-val">{isPrior ? '~' : ''}{formatPct(un)}</span>
-                </div>
-              </div>
+              <div className="rbc-pending rbc-pending--idle">Not analysed</div>
             )}
           </button>
         );

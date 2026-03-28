@@ -85,6 +85,7 @@ export interface AnalyseParams {
   step_context: string;
   depth: Depth;
   data_domains: string[];
+  feedback?: string;
 }
 
 export async function* streamAnalyse(params: AnalyseParams): AsyncGenerator<AnalyseStreamEvent> {

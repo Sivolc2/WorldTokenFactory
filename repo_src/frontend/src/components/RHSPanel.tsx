@@ -12,7 +12,7 @@ interface RHSPanelProps {
   agentThread: AgentThreadState | null;
   depth: Depth;
   onDepthChange: (rfId: string, depth: Depth) => void;
-  onAnalyse: (rfId: string) => void;
+  onAnalyse: (rfId: string, feedback?: string) => void;
 }
 
 function ThreadIcon({ status }: { status: 'complete' | 'running' | 'pending' }) {
@@ -30,7 +30,8 @@ export default function RHSPanel({
   onDepthChange,
   onAnalyse,
 }: RHSPanelProps) {
-  const [feedback, setFeedback] = useState<'up' | 'down' | null>(null);
+  const [feedbackOpen, setFeedbackOpen] = useState(false);
+  const [feedbackText, setFeedbackText] = useState('');
   const thread = agentThread;
 
   return (
@@ -76,16 +77,42 @@ export default function RHSPanel({
               {thread.is_complete ? 'Analysis complete' : 'Agent thread'}
               {' · '}{thread.risk_factor_name}
             </div>
-            {thread.is_complete && (
+            {thread.is_complete && selectedRf && (
               <div className="rhs-feedback">
-                {feedback ? (
-                  <span className="rhs-feedback__thanks">Thanks for the feedback</span>
+                {!feedbackOpen ? (
+                  <button className="rhs-feedback__toggle" onClick={() => setFeedbackOpen(true)}>
+                    ✏️ Add feedback &amp; rerun
+                  </button>
                 ) : (
-                  <>
-                    <span className="rhs-feedback__prompt">Was this analysis useful?</span>
-                    <button className="rhs-feedback__btn" onClick={() => setFeedback('up')} title="Yes">👍</button>
-                    <button className="rhs-feedback__btn" onClick={() => setFeedback('down')} title="No">👎</button>
-                  </>
+                  <div className="rhs-feedback__panel">
+                    <div className="rhs-feedback__label">What's wrong or missing?</div>
+                    <textarea
+                      className="rhs-feedback__textarea"
+                      placeholder="e.g. The loss range seems too low. Focus more on regulatory fines and third-party liability."
+                      value={feedbackText}
+                      onChange={(e) => setFeedbackText(e.target.value)}
+                      rows={4}
+                    />
+                    <div className="rhs-feedback__actions">
+                      <button
+                        className="rhs-feedback__cancel"
+                        onClick={() => { setFeedbackOpen(false); setFeedbackText(''); }}
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        className="rhs-feedback__rerun"
+                        disabled={!feedbackText.trim()}
+                        onClick={() => {
+                          onAnalyse(selectedRf.id, feedbackText.trim());
+                          setFeedbackOpen(false);
+                          setFeedbackText('');
+                        }}
+                      >
+                        Rerun with feedback ▶
+                      </button>
+                    </div>
+                  </div>
                 )}
               </div>
             )}

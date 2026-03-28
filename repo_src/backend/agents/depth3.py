@@ -50,6 +50,7 @@ async def analyse_depth3(
     business_context: str,
     step_context: str,
     data_domains: list[str],
+    feedback: str | None = None,
 ) -> AsyncGenerator[dict, None]:
     # Step 1: get candidate files via depth-1
     artifacts_from_d1 = []
@@ -65,7 +66,8 @@ async def analyse_depth3(
 
     # Step 2: decompose into sub-threads
     yield {"event": "step", "text": "Decomposing risk factor into analysis sub-threads"}
-    decompose_prompt = f"Risk factor: {risk_factor_name}\nBusiness context: {business_context}"
+    feedback_note = f"\nUser feedback to address: {feedback}" if feedback else ""
+    decompose_prompt = f"Risk factor: {risk_factor_name}\nBusiness context: {business_context}{feedback_note}"
     threads_response = await ask_llm(
         prompt_text=decompose_prompt,
         system_message=THREAD_DECOMPOSE_SYSTEM,

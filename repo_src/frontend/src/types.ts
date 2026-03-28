@@ -1,10 +1,19 @@
 export type Depth = 1 | 2 | 3;
 
+export interface RiskMetrics {
+  failure_rate: number; // 0.0 – 1.0
+  uncertainty: number; // 0.0 – 1.0
+  loss_range_low: number; // USD
+  loss_range_high: number; // USD
+  loss_range_note: string;
+}
+
 export interface RiskFactor {
   id: string;
   name: string;
   description: string;
   step_id?: string;
+  initial_metrics?: RiskMetrics; // rough bounds from the decompose step
 }
 
 export interface Step {
@@ -13,14 +22,6 @@ export interface Step {
   description: string;
   position: number;
   risk_factors: RiskFactor[];
-}
-
-export interface RiskMetrics {
-  failure_rate: number; // 0.0 – 1.0
-  uncertainty: number; // 0.0 – 1.0
-  loss_range_low: number; // USD
-  loss_range_high: number; // USD
-  loss_range_note: string;
 }
 
 export type ArtifactType = 'document' | 'image' | 'youtube' | 'audio' | 'data';

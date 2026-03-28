@@ -16,6 +16,7 @@ interface TopBarProps {
   onRunAll: () => void;
   isRunningAll: boolean;
   hasSteps: boolean;
+  onBack?: () => void;
 }
 
 function AnimatedNumber({ value }: { value: number }) {
@@ -51,12 +52,19 @@ export default function TopBar({
   onRunAll,
   isRunningAll,
   hasSteps,
+  onBack,
 }: TopBarProps) {
   return (
     <div className="top-bar">
-      <div className="top-bar__logo">World Token Factory</div>
-      {businessName && <div className="top-bar__name">{businessName}</div>}
-
+      <div className="top-bar__left">
+        {onBack && (
+          <button className="top-bar__back" onClick={onBack} title="New business">
+            ← New
+          </button>
+        )}
+        <div className="top-bar__logo">World Token Factory</div>
+        {businessName && <div className="top-bar__name">{businessName}</div>}
+      </div>
       <div className="top-bar__right">
         {kpis && kpis.analyzedCount > 0 && (
           <>

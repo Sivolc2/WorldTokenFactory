@@ -26,6 +26,7 @@ async def analyse_endpoint(request: AnalyseRequest):
                 request.risk_factor_id, request.risk_factor_name,
                 request.business_context, request.step_context,
                 request.data_domains,
+                feedback=request.feedback,
             )
         else:
             from repo_src.backend.agents.depth3 import analyse_depth3
@@ -33,6 +34,7 @@ async def analyse_endpoint(request: AnalyseRequest):
                 request.risk_factor_id, request.risk_factor_name,
                 request.business_context, request.step_context,
                 request.data_domains,
+                feedback=request.feedback,
             )
 
         async for event in gen:

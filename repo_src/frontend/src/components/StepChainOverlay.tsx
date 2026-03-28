@@ -1,13 +1,6 @@
-import type { Step, AnalysisResult } from '../types';
+import type { Step, AnalysisResult, RiskMetrics } from '../types';
 import { riskScoreToColor, getStepRiskScore, riskLabel } from '../utils/risk';
 import { formatPct, formatUSD } from '../utils/formatting';
-
-// Before any analysis runs, treat a step as having high epistemic uncertainty.
-// UN ≈ 0.78 (we genuinely don't know) and FR ≈ 0.20 (moderate prior).
-// Combined score ≈ 0.49 → amber — visually "worth investigating".
-const PRIOR_UN = 0.78;
-const PRIOR_FR = 0.20;
-const PRIOR_SCORE = (PRIOR_UN + PRIOR_FR) / 2; // ≈ 0.49
 
 interface StepChainOverlayProps {
   steps: Step[];
@@ -15,6 +8,19 @@ interface StepChainOverlayProps {
   selectedStepId: string | null;
   runningRiskFactorIds: Set<string>;
   onSelectStep: (stepId: string) => void;
+}
+
+/** Aggregate initial_metrics across all risk factors in a step. */
+function stepInitialMetrics(step: Step): RiskMetrics | null {
+  const factors = step.risk_factors.filter((rf) => rf.initial_metrics);
+  if (factors.length === 0) return null;
+  return {
+    failure_rate:    factors.reduce((s, rf) => s + rf.initial_metrics!.failure_rate, 0)    / factors.length,
+    uncertainty:     factors.reduce((s, rf) => s + rf.initial_metrics!.uncertainty,  0)    / factors.length,
+    loss_range_low:  factors.reduce((s, rf) => s + rf.initial_metrics!.loss_range_low,  0),
+    loss_range_high: factors.reduce((s, rf) => s + rf.initial_metrics!.loss_range_high, 0),
+    loss_range_note: '',
+  };
 }
 
 export default function StepChainOverlay({
@@ -34,32 +40,29 @@ export default function StepChainOverlay({
         const analyzed    = step.risk_factors.filter((rf) => analysisResults[rf.id]);
         const hasAnalysis = analyzed.length > 0;
 
-        // ── Real metrics (post-analysis) ──────────────────────────────────
-        const riskScore = hasAnalysis ? getStepRiskScore(step, analysisResults)! : null;
-        const accentColor = riskScoreToColor(hasAnalysis ? riskScore : PRIOR_SCORE);
+        // Post-analysis aggregates
+        const riskScore    = hasAnalysis ? getStepRiskScore(step, analysisResults)! : null;
+        const avgUN        = hasAnalysis ? analyzed.reduce((s, rf) => s + analysisResults[rf.id].metrics.uncertainty,  0) / analyzed.length : null;
+        const avgFR        = hasAnalysis ? analyzed.reduce((s, rf) => s + analysisResults[rf.id].metrics.failure_rate, 0) / analyzed.length : null;
+        const totalMinLoss = hasAnalysis ? analyzed.reduce((s, rf) => s + analysisResults[rf.id].metrics.loss_range_low,  0) : null;
+        const totalMaxLoss = hasAnalysis ? analyzed.reduce((s, rf) => s + analysisResults[rf.id].metrics.loss_range_high, 0) : null;
 
-        const avgUN = hasAnalysis
-          ? analyzed.reduce((s, rf) => s + analysisResults[rf.id].metrics.uncertainty, 0) / analyzed.length
-          : null;
-        const avgFR = hasAnalysis
-          ? analyzed.reduce((s, rf) => s + analysisResults[rf.id].metrics.failure_rate, 0) / analyzed.length
-          : null;
-        const totalMaxLoss = hasAnalysis
-          ? analyzed.reduce((s, rf) => s + analysisResults[rf.id].metrics.loss_range_high, 0)
-          : null;
-        const totalMinLoss = hasAnalysis
-          ? analyzed.reduce((s, rf) => s + analysisResults[rf.id].metrics.loss_range_low, 0)
-          : null;
+        // Initial-estimate aggregates (from decompose)
+        const initial    = !hasAnalysis ? stepInitialMetrics(step) : null;
+        const initScore  = initial ? (initial.failure_rate + initial.uncertainty) / 2 : null;
+
+        const accentColor = riskScoreToColor(hasAnalysis ? riskScore : initScore);
+        const isInitial   = !hasAnalysis && !!initial;
 
         return (
           <div key={step.id} className="step-chain__item">
             {i > 0 && <div className="step-chain__arrow">→</div>}
             <button
-              className={`step-card${isSelected ? ' step-card--selected' : ''}${!hasAnalysis ? ' step-card--prior' : ''}`}
+              className={`step-card${isSelected ? ' step-card--selected' : ''}${isInitial ? ' step-card--initial' : ''}`}
               style={{ '--step-color': accentColor } as React.CSSProperties}
               onClick={() => onSelectStep(step.id)}
             >
-              {/* ── Name row ── */}
+              {/* Name row */}
               <div className="step-card__top">
                 <span className="step-card__dot" style={{ background: accentColor }} />
                 <span className="step-card__name">{step.name}</span>
@@ -70,9 +73,8 @@ export default function StepChainOverlay({
                 )}
               </div>
 
-              {/* ── Metrics row ── */}
+              {/* Metrics row */}
               {hasAnalysis ? (
-                // Real values
                 <div className="step-card__meta">
                   <span className="step-card__tag" style={{ background: accentColor }}>
                     {riskLabel(riskScore!)}
@@ -80,29 +82,34 @@ export default function StepChainOverlay({
                   <span className="step-card__un">UN {formatPct(avgUN!)}</span>
                   <span className="step-card__un">FR {formatPct(avgFR!)}</span>
                 </div>
-              ) : (
-                // Prior / default estimates — clearly marked with ~
+              ) : initial ? (
                 <div className="step-card__meta">
-                  <span className="step-card__tag step-card__tag--prior" style={{ background: accentColor }}>
-                    PRIOR
+                  <span className="step-card__tag step-card__tag--initial" style={{ background: accentColor }}>
+                    {riskLabel(initScore!)}
                   </span>
-                  <span className="step-card__un step-card__un--prior">
-                    ~UN {formatPct(PRIOR_UN)}
-                  </span>
-                  <span className="step-card__un step-card__un--prior">
-                    ~FR {formatPct(PRIOR_FR)}
+                  <span className="step-card__un step-card__un--initial">~UN {formatPct(initial.uncertainty)}</span>
+                  <span className="step-card__un step-card__un--initial">~FR {formatPct(initial.failure_rate)}</span>
+                </div>
+              ) : (
+                <div className="step-card__meta">
+                  <span className="step-card__tag step-card__tag--empty">
+                    {step.risk_factors.length} factor{step.risk_factors.length !== 1 ? 's' : ''}
                   </span>
                 </div>
               )}
 
-              {/* ── Exposure row ── */}
+              {/* Exposure row */}
               {hasAnalysis && totalMinLoss !== null && totalMaxLoss !== null ? (
                 <div className="step-card__exposure">
                   {formatUSD(totalMinLoss)} – {formatUSD(totalMaxLoss)}
                 </div>
+              ) : initial ? (
+                <div className="step-card__exposure step-card__exposure--initial">
+                  ~{formatUSD(initial.loss_range_low)} – {formatUSD(initial.loss_range_high)}
+                </div>
               ) : (
-                <div className="step-card__exposure step-card__exposure--prior">
-                  {step.risk_factors.length} factor{step.risk_factors.length !== 1 ? 's' : ''} · exposure TBD
+                <div className="step-card__exposure step-card__exposure--empty">
+                  exposure TBD
                 </div>
               )}
             </button>

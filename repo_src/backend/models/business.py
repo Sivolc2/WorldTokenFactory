@@ -25,3 +25,4 @@ class AnalyseRequest(BaseModel):
     step_context: str
     depth: int = 1
     data_domains: list[str] = ["oil", "geo", "shared"]
+    feedback: Optional[str] = None
