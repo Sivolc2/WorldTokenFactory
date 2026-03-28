@@ -173,3 +173,60 @@ export async function ingestSensoDocuments(): Promise<{ingested: number; results
   if (!r.ok) throw new Error(`HTTP ${r.status}`);
   return r.json();
 }
+
+// ── Live data (public APIs: USGS, NASA EONET, NOAA, Open-Meteo, FEMA, World Bank, STAC) ──
+
+export interface LiveRiskSnapshot {
+  earthquakes?: { features: unknown[]; ok: boolean };
+  natural_events?: { events: unknown[]; ok: boolean };
+  weather_alerts?: { features: unknown[]; ok: boolean };
+  climate?: { summary: unknown; ok: boolean };
+  forecast?: { daily: unknown; ok: boolean };
+  fema_disasters?: { results: unknown[]; ok: boolean };
+  country_risk?: { indicators: unknown; ok: boolean };
+  satellite?: { features: unknown[]; ok: boolean };
+  [key: string]: unknown;
+}
+
+export async function fetchRiskSnapshot(
+  lat: number,
+  lng: number,
+  countryCode = 'US',
+  state?: string,
+): Promise<LiveRiskSnapshot> {
+  const params = new URLSearchParams({
+    lat: String(lat), lng: String(lng), country_code: countryCode,
+  });
+  if (state) params.set('state', state);
+  const r = await fetch(`${API_BASE}/api/live-data/risk-snapshot?${params}`);
+  if (!r.ok) throw new Error(`HTTP ${r.status}`);
+  return r.json();
+}
+
+export async function fetchWeatherAlerts(
+  lat: number,
+  lng: number,
+  severity = 'Extreme,Severe',
+): Promise<{ features: unknown[]; ok?: boolean }> {
+  const params = new URLSearchParams({ lat: String(lat), lng: String(lng), severity });
+  const r = await fetch(`${API_BASE}/api/live-data/weather-alerts?${params}`);
+  if (!r.ok) throw new Error(`HTTP ${r.status}`);
+  return r.json();
+}
+
+export async function fetchEarthquakes(
+  lat: number,
+  lng: number,
+  radiusKm = 200,
+  days = 30,
+  minMagnitude = 2.5,
+): Promise<{ features: unknown[] }> {
+  const params = new URLSearchParams({
+    lat: String(lat), lng: String(lng),
+    radius_km: String(radiusKm), days: String(days),
+    min_magnitude: String(minMagnitude),
+  });
+  const r = await fetch(`${API_BASE}/api/live-data/earthquakes?${params}`);
+  if (!r.ok) throw new Error(`HTTP ${r.status}`);
+  return r.json();
+}

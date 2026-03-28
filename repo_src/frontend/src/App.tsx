@@ -8,7 +8,7 @@ import type {
   Artifact,
   ArtifactType,
 } from './types';
-import { streamDecompose, streamAnalyse, fetchDocument } from './api';
+import { streamDecompose, streamAnalyse, fetchDocument, fetchHealth, fetchRiskSnapshot, type LiveRiskSnapshot } from './api';
 import TopBar, { type TopBarKPIs } from './components/TopBar';
 import BusinessInput from './components/BusinessInput';
 import MapView, { detectMapType, type BusinessMapType, type MapFocus } from './components/MapView';
@@ -144,6 +144,8 @@ export default function App() {
   const [mapFocus, setMapFocus] = useState<MapFocus | null>(null);
   const [docMarkdown, setDocMarkdown] = useState('');
   const [activeDocSection, setActiveDocSection] = useState<string | null>(null);
+  const [backendOnline, setBackendOnline] = useState<boolean | null>(null);
+  const [liveRiskSnapshot, setLiveRiskSnapshot] = useState<LiveRiskSnapshot | null>(null);
 
   const abortControllersRef = useRef<Map<string, AbortController>>(new Map());
   // Refs so handleAnalyse always sees current values without stale closures
@@ -187,6 +189,13 @@ export default function App() {
     }
   }, [steps]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Backend health check on mount
+  useEffect(() => {
+    fetchHealth()
+      .then(() => setBackendOnline(true))
+      .catch(() => setBackendOnline(false));
+  }, []);
+
   // Fetch the primary document when the map type is known
   useEffect(() => {
     if (mapType !== 'oil') return;
@@ -194,6 +203,16 @@ export default function App() {
       .then(setDocMarkdown)
       .catch(() => {/* silent */});
   }, [mapType]);
+
+  // Fetch live risk snapshot when map focus changes (best-effort, non-blocking)
+  useEffect(() => {
+    if (!mapFocus) return;
+    const [lat, lng] = mapFocus.center;
+    const stateCode = mapType === 'oil' ? 'TX' : undefined;
+    fetchRiskSnapshot(lat, lng, 'US', stateCode)
+      .then(setLiveRiskSnapshot)
+      .catch(() => {/* silent — live data is supplementary */});
+  }, [mapFocus, mapType]);
 
   const forecastCurve = useMemo((): ChartPoint[] => {
     if (tokenHistory.length === 0) return [];
@@ -562,6 +581,16 @@ export default function App() {
 
   return (
     <>
+      {backendOnline === false && (
+        <div style={{
+          position: 'fixed', top: 0, left: 0, right: 0, zIndex: 2000,
+          background: '#ff0066', color: '#fff', padding: '6px 16px',
+          fontSize: '12px', fontFamily: 'monospace', textAlign: 'center',
+          letterSpacing: '0.05em',
+        }}>
+          Backend offline — check that the API server is running
+        </div>
+      )}
       <TopBar
         businessName={businessName}
         totalTokens={totalTokens}
@@ -651,7 +680,7 @@ export default function App() {
                 )}
               </MapView>
             </div>
-            <AgentDebugPane agentThread={agentThread} />
+            <AgentDebugPane agentThread={agentThread} liveRiskSnapshot={liveRiskSnapshot} />
           </div>
         </div>
       )}
@@ -701,7 +730,15 @@ export default function App() {
           }}
         >
           <OrchestrationPanel onResult={(result) => {
-            if (result && result.risk_factor_id) {
+            // Shape guard: only accept results that have the minimum required AnalysisResult fields
+            if (
+              result &&
+              result.risk_factor_id &&
+              result.metrics &&
+              typeof result.summary !== 'undefined' &&
+              Array.isArray(result.recommendations) &&
+              Array.isArray(result.gaps)
+            ) {
               setAnalysisResults(prev => ({
                 ...prev,
                 [result.risk_factor_id as string]: result as unknown as AnalysisResult,
