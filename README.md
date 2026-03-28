@@ -11,8 +11,8 @@ Built for the **Multimodal Frontier Hackathon**. World Token Factory treats ever
 1. **Describe your business** — free text, or pick a demo example
 2. **Decompose** — AI breaks it into up to 5 business process steps, each with a set of risk factors
 3. **Analyse** — run agents at three depth levels against a corpus of domain documents, maps, videos, and data files
-4. **Inspect** — see precise risk metrics (failure rate, uncertainty, potential loss range) per factor, with the source artifacts that back them up
-5. **Watch the AI think** — a live agent thread panel shows the reasoning chain in real time
+4. **Inspect** — see precise risk metrics (failure rate, uncertainty, potential loss range) per factor, with source artifacts
+5. **Watch the AI think** — a live agent thread panel shows the reasoning chain in real time as it runs
 
 ### The Two Demo Cases
 
@@ -36,15 +36,32 @@ Most risk tools collapse everything into one number. We don't.
 - **Failure Rate** — given what we know, the probability of a bad outcome
 - **Uncertainty** — how much we *don't* know (confidence in the failure rate itself)
 
-A 5% failure rate with 80% uncertainty is very different from a 5% failure rate with 10% uncertainty. The potential loss is always shown as a range — the width of that range is itself informative.
+A 5% failure rate with 80% uncertainty is very different from a 5% failure rate with 10% uncertainty. The potential loss is always shown as a range — the width of that range is itself the signal.
 
 ### Three Depth Levels
 
-| Depth | Name | What runs |
-|-------|------|-----------|
-| 1 | Quick Scan | Filename matching only — fast orientation |
-| 2 | Research Brief | Agent reads source files, synthesises findings, identifies gaps |
-| 3 | Deep Run | Parallelized agents, extended reasoning, full corpus — long token run |
+| Depth | Name | What runs | Token cost |
+|-------|------|-----------|------------|
+| 1 | Quick Scan | Filename matching only — fast orientation | ~150–800 |
+| 2 | Research Brief | Agent reads source files, synthesises findings, identifies gaps | ~1,500–8,000 |
+| 3 | Deep Run | Iterative autoresearch loop + Gemini multimodal — full corpus | ~8,000–100,000+ |
+
+### The Autoresearch Loop (Depth 3)
+
+Depth 3 uses an iterative optimization loop inspired by [karpathy/autoresearch](https://github.com/karpathy/autoresearch). Instead of minimizing validation loss, it minimizes `uncertainty_score` — the normalized width of the loss range:
+
+```
+uncertainty_score = (loss_range_high - loss_range_low) / $1B prior
+```
+
+Each iteration:
+1. Runs 3–5 parallel analysis threads against the document corpus
+2. Scores the result: how wide is the loss range? (lower = better)
+3. Refines the research strategy via LLM: different threads, different keyword focus, different synthesis emphasis
+4. Logs to `risk_iterations.tsv`
+5. Emits `iteration_update` events so the frontend chart plots real uncertainty reduction
+
+The chart's Y-axis shows the actual loss range narrowing in real time as iterations complete. That's the token factory concept made visible.
 
 ---
 
@@ -53,18 +70,36 @@ A 5% failure rate with 80% uncertainty is very different from a 5% failure rate 
 ```
 WorldTokenFactory/
 ├── docs/
-│   ├── frontend.md        # Full frontend design spec
-│   ├── backend.md         # Backend API, agents, and placeholder map
-│   └── pitch.md           # Hackathon pitch narrative
+│   ├── frontend.md            # UI design spec
+│   ├── backend.md             # Backend API, agents, data models
+│   └── pitch.md               # Hackathon pitch narrative
 ├── repo_src/
-│   ├── frontend/          # React + TypeScript (Vite)
-│   └── backend/           # Python FastAPI
+│   ├── frontend/              # React + TypeScript (Vite)
+│   └── backend/
+│       ├── agents/
+│       │   ├── decomposer.py          # Business → steps + risk factors
+│       │   ├── depth1.py              # Quick scan (filenames only)
+│       │   ├── depth2.py              # Research brief (reads files)
+│       │   ├── depth3.py              # Deep run (autoresearch loop)
+│       │   ├── risk_evaluate.py       # uncertainty_score() — fixed evaluator
+│       │   ├── risk_research_template.py  # STRATEGY dict — modified by loop agent
+│       │   └── risk_program.md        # Instructions for the research loop agent
+│       ├── models/
+│       │   └── risk.py                # Pydantic: RiskMetrics, Artifact, AnalysisResult
+│       └── services/
+│           ├── data_source.py         # File access (local → GDrive later)
+│           ├── token_counter.py       # Token tracking + estimates
+│           ├── gemini_multimodal.py   # Gemini vision/audio/video scanning
+│           └── youtube.py             # YouTube metadata resolution
 ├── data/
-│   ├── oil/               # Oil industry demo datasets
-│   ├── lemming/           # Lemming farmers demo datasets
-│   ├── geo/               # PNG maps and geospatial overlays
-│   └── shared/            # General risk reference docs
-└── README.md
+│   ├── oil/                   # Oil industry demo datasets
+│   ├── lemming/               # Lemming farmers demo datasets
+│   ├── geo/                   # PNG maps and geospatial overlays
+│   └── shared/                # General risk reference docs
+├── vendor/
+│   └── autoresearch/          # git submodule — karpathy/autoresearch
+│                              # Loop pattern adapted for risk research
+└── risk_iterations.tsv        # Per-iteration uncertainty scores (written at runtime)
 ```
 
 ---
@@ -72,8 +107,8 @@ WorldTokenFactory/
 ## Quick Start
 
 ```bash
-# Install dependencies and set up environment
-pnpm setup-project
+# Install dependencies
+pnpm install
 
 # Run both frontend and backend
 pnpm dev
@@ -85,6 +120,10 @@ pnpm dev:backend    # http://localhost:8000
 
 Data folder defaults to `./data/`. Override with `DATA_PATH` environment variable.
 
+```bash
+DATA_PATH=/path/to/data pnpm dev:backend
+```
+
 ---
 
 ## Tech Stack
@@ -94,12 +133,12 @@ Data folder defaults to `./data/`. Override with `DATA_PATH` environment variabl
 | Frontend | React + TypeScript + Vite |
 | Backend | Python + FastAPI |
 | Monorepo | Turborepo + pnpm |
-| AI (current) | Stub agents with placeholder responses |
-| AI (target) | Gemini 1.5 Pro — multimodal, long context |
-| Data (current) | Local `/data/` folder |
-| Data (target) | Google Drive via Drive API |
+| AI core | Gemini 1.5 Pro — multimodal, long context |
+| Multimodal | Gemini for satellite imagery, video, audio analysis |
+| Data source | Local `/data/` folder (Google Drive target) |
+| Research loop | karpathy/autoresearch pattern (vendor submodule) |
 
-All integration points are marked with `# Placeholder` comments in the backend code. See [`docs/backend.md`](docs/backend.md) for the full placeholder map.
+Integration points are marked with `# Placeholder` comments. See [`docs/backend.md`](docs/backend.md) for the full map.
 
 ---
 
@@ -107,8 +146,8 @@ All integration points are marked with `# Placeholder` comments in the backend c
 
 | Sponsor | Integration |
 |---------|------------|
-| **Google DeepMind / Gemini** | Core AI engine — multimodal analysis, decomposition, research agents |
-| **Assistant UI** | Chat interface and live agent thread panel |
+| **Google DeepMind / Gemini** | Multimodal scan (imagery, video, audio), decomposition, research synthesis |
+| **Assistant UI** | Live agent thread panel and chat interface |
 | **DigitalOcean** | Backend inference hosting |
 
 ---
@@ -117,9 +156,9 @@ All integration points are marked with `# Placeholder` comments in the backend c
 
 | Doc | Contents |
 |-----|---------|
-| [`docs/frontend.md`](docs/frontend.md) | Full UI design: layout, components, risk metrics display, artifact types, agent thread panel, demo flow |
-| [`docs/backend.md`](docs/backend.md) | API endpoints, agent design, services, data models, placeholder map |
-| [`docs/pitch.md`](docs/pitch.md) | Hackathon pitch narrative, one-liners, business case |
+| [`docs/frontend.md`](docs/frontend.md) | UI layout, components, risk metrics display, artifact types, agent thread panel |
+| [`docs/backend.md`](docs/backend.md) | API endpoints, agent design, autoresearch loop, stream events, placeholder map |
+| [`docs/pitch.md`](docs/pitch.md) | Hackathon pitch narrative, one-liners, sponsor table, business model |
 
 ---
 
@@ -129,6 +168,5 @@ All integration points are marked with `# Placeholder` comments in the backend c
 pnpm lint         # Lint frontend and backend
 pnpm typecheck    # TypeScript type checking
 pnpm test         # Run all tests
-pnpm e2e          # Playwright end-to-end tests
-pnpm ci           # Full CI pipeline (lint + typecheck + test)
+pnpm ci           # Full CI pipeline
 ```

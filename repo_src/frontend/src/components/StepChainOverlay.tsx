@@ -42,7 +42,6 @@ export default function StepChainOverlay({
 
         // Post-analysis aggregates
         const riskScore    = hasAnalysis ? getStepRiskScore(step, analysisResults)! : null;
-        const avgUN        = hasAnalysis ? analyzed.reduce((s, rf) => s + analysisResults[rf.id].metrics.uncertainty,  0) / analyzed.length : null;
         const avgFR        = hasAnalysis ? analyzed.reduce((s, rf) => s + analysisResults[rf.id].metrics.failure_rate, 0) / analyzed.length : null;
         const totalMinLoss = hasAnalysis ? analyzed.reduce((s, rf) => s + analysisResults[rf.id].metrics.loss_range_low,  0) : null;
         const totalMaxLoss = hasAnalysis ? analyzed.reduce((s, rf) => s + analysisResults[rf.id].metrics.loss_range_high, 0) : null;
@@ -56,13 +55,7 @@ export default function StepChainOverlay({
 
         return (
           <div key={step.id} className="step-chain__item">
-            {i > 0 && (
-              <div className="step-chain__cascade">
-                <div className="step-chain__cascade-line" />
-                <span className="step-chain__cascade-label">cascades</span>
-                <div className="step-chain__cascade-head">▶</div>
-              </div>
-            )}
+            {i > 0 && <div className="step-chain__arrow">→</div>}
             <button
               className={`step-card${isSelected ? ' step-card--selected' : ''}${isInitial ? ' step-card--initial' : ''}`}
               style={{ '--step-color': accentColor } as React.CSSProperties}
@@ -85,7 +78,6 @@ export default function StepChainOverlay({
                   <span className="step-card__tag" style={{ background: accentColor }}>
                     {riskLabel(riskScore!)}
                   </span>
-                  <span className="step-card__un">UN {formatPct(avgUN!)}</span>
                   <span className="step-card__un">FR {formatPct(avgFR!)}</span>
                 </div>
               ) : initial ? (

@@ -77,10 +77,6 @@ export default function StepBox({
               <span className="step-box__metric-label">FR</span>
               <span className="step-box__metric-value">{formatPct(avgFR)}</span>
             </div>
-            <div className="step-box__metric">
-              <span className="step-box__metric-label">UN</span>
-              <span className="step-box__metric-value">{formatPct(avgUN)}</span>
-            </div>
           </div>
           <div className="step-box__loss">
             {formatUSD(totalLoss)} – {formatUSD(totalLossHigh)}

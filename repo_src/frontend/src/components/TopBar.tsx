@@ -126,7 +126,7 @@ export default function TopBar({
               <div className="top-bar__kpi">
                 <span className="top-bar__kpi-label">Critical Risks</span>
                 <span className={`top-bar__kpi-value${kpis.criticalCount > 0 ? ' top-bar__kpi-value--red' : ' top-bar__kpi-value--green'}`}>
-                  {kpis.criticalCount} / {kpis.analyzedCount}
+                  {kpis.criticalCount}
                 </span>
               </div>
             </div>
@@ -188,13 +188,13 @@ export default function TopBar({
             >
               {isRunningAll ? (
                 <>
-                  Running{' '}
+                  Running D{globalDepth}{' '}
                   <span className="loading-dots" style={{ fontSize: 10 }}>
                     <span /><span /><span />
                   </span>
                 </>
               ) : (
-                'Run All ▶'
+                'Run ▶'
               )}
             </button>
           </div>

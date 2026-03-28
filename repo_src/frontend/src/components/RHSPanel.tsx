@@ -4,6 +4,7 @@ import { getDepthLabel } from '../utils/risk';
 import { formatTokens } from '../utils/formatting';
 import DepthPicker from './DepthPicker';
 import RiskMetricsDisplay from './RiskMetricsDisplay';
+import ArtifactList from './ArtifactList';
 
 interface RHSPanelProps {
   selectedRf: RiskFactor | null;
@@ -160,9 +161,23 @@ export default function RHSPanel({
         )}
       </div>
 
+      {/* ── Artifacts (live during run, full when complete) ── */}
+      {(isRunning && thread && thread.liveArtifacts.length > 0) && (
+        <div className="rhs-result">
+          <div className="rhs-result__section">
+            <ArtifactList artifacts={thread.liveArtifacts} />
+          </div>
+        </div>
+      )}
+
       {/* ── Result metrics (scrollable bottom section) ── */}
       {result && (
         <div className="rhs-result">
+          {result.artifacts.length > 0 && (
+            <div className="rhs-result__section">
+              <ArtifactList artifacts={result.artifacts} />
+            </div>
+          )}
           {result.gaps.length > 0 && (
             <div className="rhs-result__section">
               <div className="rhs-result__label">Gaps identified</div>

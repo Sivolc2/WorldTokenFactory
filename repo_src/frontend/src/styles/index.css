@@ -635,6 +635,102 @@ textarea, input { font-family: inherit; }
   font-weight: 900;
 }
 
+/* ─── CHART POINT TOOLTIP ─────────────────────────────────── */
+
+.tec-wrap {
+  position: relative;
+}
+
+.tec-tooltip {
+  position: absolute;
+  z-index: 200;
+  width: 240px;
+  background: rgba(10, 10, 15, 0.96);
+  border: 1px solid rgba(0, 255, 136, 0.25);
+  border-radius: 8px;
+  padding: 10px 12px;
+  pointer-events: none;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.6), 0 0 0 1px rgba(0,255,136,0.1);
+  font-family: var(--font-body);
+}
+
+.tec-tooltip__header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 4px;
+}
+
+.tec-tooltip__name {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--color-fg);
+  line-height: 1.3;
+  flex: 1;
+}
+
+.tec-tooltip__depth {
+  font-size: 9px;
+  font-weight: 800;
+  font-family: var(--font-mono);
+  letter-spacing: 0.06em;
+  padding: 1px 5px;
+  border-radius: 3px;
+  background: rgba(0, 255, 136, 0.15);
+  color: var(--color-accent);
+  white-space: nowrap;
+}
+
+.tec-tooltip__range {
+  font-size: 11px;
+  font-weight: 700;
+  font-family: var(--font-mono);
+  color: #00ccff;
+  margin-bottom: 6px;
+}
+
+.tec-tooltip__summary {
+  font-size: 10px;
+  color: rgba(224, 255, 224, 0.7);
+  line-height: 1.45;
+  margin: 0 0 6px;
+}
+
+.tec-tooltip__gaps {
+  list-style: none;
+  margin: 0 0 6px;
+  padding: 0;
+  border-top: 1px solid rgba(255,255,255,0.06);
+  padding-top: 5px;
+}
+
+.tec-tooltip__gaps li {
+  font-size: 9.5px;
+  color: rgba(224, 255, 224, 0.55);
+  line-height: 1.4;
+  padding: 1px 0;
+  padding-left: 10px;
+  position: relative;
+}
+
+.tec-tooltip__gaps li::before {
+  content: '▸';
+  position: absolute;
+  left: 0;
+  color: var(--color-accent);
+  font-size: 8px;
+}
+
+.tec-tooltip__cta {
+  font-size: 9px;
+  font-weight: 600;
+  color: var(--color-accent);
+  letter-spacing: 0.03em;
+  margin-top: 4px;
+  opacity: 0.7;
+  text-align: right;
+}
+
 .lhs-section__title {
   font-size: 10px;
   font-weight: 700;
@@ -935,41 +1031,12 @@ textarea, input { font-family: inherit; }
   align-items: center;
 }
 
-.step-chain__cascade {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
+.step-chain__arrow {
+  font-size: 16px;
+  color: rgba(255,255,255,0.8);
+  padding: 0 2px;
   flex-shrink: 0;
-  width: 52px;
-  gap: 2px;
-  position: relative;
-}
-
-.step-chain__cascade-line {
-  width: 100%;
-  height: 2px;
-  background: linear-gradient(90deg, rgba(255,160,0,0.5) 0%, rgba(255,80,60,0.85) 100%);
-  border-radius: 1px;
-  box-shadow: 0 0 6px rgba(255,120,40,0.5);
-}
-
-.step-chain__cascade-label {
-  font-size: 9px;
-  font-weight: 600;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  color: rgba(255, 200, 100, 0.95);
-  text-shadow: 0 1px 4px rgba(0,0,0,0.7);
-  line-height: 1;
-  white-space: nowrap;
-}
-
-.step-chain__cascade-head {
-  font-size: 8px;
-  color: rgba(255,100,60,0.9);
-  line-height: 1;
-  text-shadow: 0 1px 4px rgba(0,0,0,0.6);
-  margin-top: -1px;
+  text-shadow: 0 1px 3px rgba(0,0,0,0.4);
 }
 
 .step-card {

@@ -67,7 +67,9 @@ function YouTubeArtifact({ artifact }: { artifact: Artifact }) {
   const url = artifact.url ?? '';
   const videoId = youtubeVideoId(url);
   const [title, setTitle] = useState<string | null>(null);
+  const [embedded, setEmbedded] = useState(false);
   const thumbnailUrl = videoId ? youtubeThumbnail(videoId) : null;
+  const embedUrl = videoId ? `https://www.youtube.com/embed/${videoId}?autoplay=1` : null;
 
   useEffect(() => {
     if (!url) return;
@@ -79,31 +81,65 @@ function YouTubeArtifact({ artifact }: { artifact: Artifact }) {
   return (
     <div className="artifact-item">
       <div className="artifact-yt">
-        <a href={url || undefined} target="_blank" rel="noopener noreferrer" style={{ display: 'block', flexShrink: 0 }}>
-          {thumbnailUrl ? (
-            <img className="artifact-yt__thumb" src={thumbnailUrl} alt="YouTube thumbnail" style={{ cursor: 'pointer' }} />
-          ) : (
-            <div className="artifact-yt__thumb" />
-          )}
-        </a>
+        {!embedded ? (
+          <button
+            className="artifact-yt__thumb-btn"
+            onClick={() => embedUrl && setEmbedded(true)}
+            title="Play video"
+            style={{ display: 'block', flexShrink: 0, border: 'none', padding: 0, background: 'none', cursor: 'pointer', position: 'relative' }}
+          >
+            {thumbnailUrl ? (
+              <img className="artifact-yt__thumb" src={thumbnailUrl} alt="YouTube thumbnail" />
+            ) : (
+              <div className="artifact-yt__thumb" />
+            )}
+            <span style={{
+              position: 'absolute', top: '50%', left: '50%',
+              transform: 'translate(-50%, -50%)',
+              fontSize: 28, lineHeight: 1, pointerEvents: 'none',
+            }}>▶</span>
+          </button>
+        ) : null}
         <div className="artifact-yt__info">
           <span className="artifact-item__icon" style={{ fontSize: 16 }}>🎥</span>
           <div className="artifact-yt__title">
             {title ?? artifact.filename.replace('.url', '')}
           </div>
-          <div className="artifact-yt__url">{url}</div>
-          {url && (
-            <a className="artifact-yt__open" href={url} target="_blank" rel="noopener noreferrer">
-              Open in YouTube ↗
-            </a>
-          )}
           {artifact.relevance && (
-            <div className="artifact-item__relevance" style={{ marginTop: 6 }}>
+            <div className="artifact-item__relevance" style={{ marginTop: 4 }}>
               {artifact.relevance}
             </div>
           )}
+          {!embedded && url && (
+            <div style={{ display: 'flex', gap: 8, marginTop: 6 }}>
+              {embedUrl && (
+                <button className="artifact-item__toggle" onClick={() => setEmbedded(true)}>
+                  ▶ Embed
+                </button>
+              )}
+              <a className="artifact-item__toggle" href={url} target="_blank" rel="noopener noreferrer">
+                YouTube ↗
+              </a>
+            </div>
+          )}
+          {embedded && (
+            <button className="artifact-item__toggle" style={{ marginTop: 6 }} onClick={() => setEmbedded(false)}>
+              ▲ Hide
+            </button>
+          )}
         </div>
       </div>
+      {embedded && embedUrl && (
+        <div className="artifact-item__preview" style={{ marginTop: 8 }}>
+          <iframe
+            src={embedUrl}
+            title={title ?? artifact.filename}
+            style={{ width: '100%', aspectRatio: '16/9', border: 'none', borderRadius: 4 }}
+            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+            allowFullScreen
+          />
+        </div>
+      )}
     </div>
   );
 }

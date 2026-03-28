@@ -60,6 +60,7 @@ export interface AgentThreadState {
   tokens_estimated: number;
   is_complete: boolean;
   is_error: boolean;
+  liveArtifacts: Artifact[];
   result?: AnalysisResult;
 }
 

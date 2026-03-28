@@ -5,6 +5,8 @@ import type {
   AnalysisResult,
   AgentThreadState,
   AgentThreadStep,
+  Artifact,
+  ArtifactType,
 } from './types';
 import { streamDecompose, streamAnalyse, fetchDocument } from './api';
 import TopBar, { type TopBarKPIs } from './components/TopBar';
@@ -20,12 +22,14 @@ import DocumentViewer, { type SectionMetric } from './components/DocumentViewer'
 
 type AppScreen = 'input' | 'main';
 
-/** Sum of (high − low) across all factors, using best available metrics. */
-function portfolioUncertainty(steps: Step[], results: Record<string, AnalysisResult>): number {
-  return steps.flatMap((s) => s.risk_factors).reduce((sum, rf) => {
+/** Sum of loss_range_low and loss_range_high across all factors, using best available metrics. */
+function portfolioExposure(steps: Step[], results: Record<string, AnalysisResult>): { low: number; high: number } {
+  let low = 0, high = 0;
+  for (const rf of steps.flatMap((s) => s.risk_factors)) {
     const m = results[rf.id]?.metrics ?? rf.initial_metrics;
-    return sum + (m ? m.loss_range_high - m.loss_range_low : 0);
-  }, 0);
+    if (m) { low += m.loss_range_low; high += m.loss_range_high; }
+  }
+  return { low, high };
 }
 
 function tokenEstimateNumber(depth: Depth): number {
@@ -176,10 +180,10 @@ export default function App() {
   // Seed the live curve once steps arrive (uses initial_metrics as baseline)
   useEffect(() => {
     if (steps.length === 0 || tokenHistory.length > 0) return;
-    const unc = portfolioUncertainty(steps, {});
-    if (unc > 0) {
-      setTokenHistory([{ tokens: 0, uncertainty: unc }]);
-      setRiskThreshold(unc * 0.3);
+    const { low, high } = portfolioExposure(steps, {});
+    if (high > 0) {
+      setTokenHistory([{ tokens: 0, low, high }]);
+      setRiskThreshold(high * 0.6);
     }
   }, [steps]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -193,14 +197,16 @@ export default function App() {
 
   const forecastCurve = useMemo((): ChartPoint[] => {
     if (tokenHistory.length === 0) return [];
-    const initialUnc = tokenHistory[0].uncertainty;
+    const { low: initLow, high: initHigh } = tokenHistory[0];
+    const mid   = (initLow + initHigh) / 2;
+    const halfW = (initHigh - initLow) / 2;
     const N = steps.flatMap((s) => s.risk_factors).length;
-    if (N === 0 || initialUnc === 0) return [];
+    if (N === 0 || halfW === 0) return [];
     return [
-      { tokens: 0,           uncertainty: initialUnc },
-      { tokens: N * 350,     uncertainty: initialUnc * 0.55 },
-      { tokens: N * 3_000,   uncertainty: initialUnc * 0.25 },
-      { tokens: N * 200_000, uncertainty: initialUnc * 0.08 },
+      { tokens: 0,           low: initLow,              high: initHigh },
+      { tokens: N * 350,     low: mid - halfW * 0.55,   high: mid + halfW * 0.55 },
+      { tokens: N * 3_000,   low: mid - halfW * 0.25,   high: mid + halfW * 0.25 },
+      { tokens: N * 200_000, low: mid - halfW * 0.08,   high: mid + halfW * 0.08 },
     ];
   }, [tokenHistory, steps]);
 
@@ -209,6 +215,13 @@ export default function App() {
     'permian-field-operations': 0,
     'midstream-egress': 1,
     'gom-offshore-buffer': 2,
+  };
+
+  // Step index → section slug (reverse lookup for chart point metadata)
+  const OIL_STEP_IDX_SECTION: Record<number, string> = {
+    0: 'permian-field-operations',
+    1: 'midstream-egress',
+    2: 'gom-offshore-buffer',
   };
 
   const sectionMetrics = useMemo((): Record<string, SectionMetric> => {
@@ -280,7 +293,7 @@ export default function App() {
 
   // ── Analyse ────────────────────────────────────────────────────────────────
 
-  const handleAnalyse = useCallback(async (rfId: string, feedback?: string) => {
+  const handleAnalyse = useCallback(async (rfId: string, feedback?: string, depthOverride?: Depth) => {
     let rf = null, step = null;
     for (const s of steps) {
       const found = s.risk_factors.find((r) => r.id === rfId);
@@ -288,7 +301,9 @@ export default function App() {
     }
     if (!rf || !step) return;
 
-    const depth = riskFactorDepths[rfId] ?? globalDepth;
+    const depth = depthOverride ?? riskFactorDepths[rfId] ?? globalDepth;
+    const stepIdx = steps.findIndex((s) => s.id === step.id);
+    const sectionId = mapType === 'oil' ? OIL_STEP_IDX_SECTION[stepIdx] : undefined;
 
     abortControllersRef.current.get(rfId)?.abort();
     const ac = new AbortController();
@@ -321,6 +336,7 @@ export default function App() {
       tokens_estimated: tokenEstimateNumber(depth),
       is_complete: false,
       is_error: false,
+      liveArtifacts: [],
     };
 
     setAgentThread(threadState);
@@ -367,16 +383,34 @@ export default function App() {
           case 'step':
             advanceStep();
             break;
-          case 'file_found':
+          case 'file_found': {
+            const fn = event.filename ?? '';
+            const ext = fn.split('.').pop()?.toLowerCase() ?? '';
+            const artifactType: ArtifactType =
+              ['mp4', 'mkv', 'mov', 'webm'].includes(ext) ? 'video' :
+              ['png', 'jpg', 'jpeg', 'tif', 'tiff', 'gif'].includes(ext) ? 'image' :
+              ['mp3', 'wav', 'ogg'].includes(ext) ? 'audio' :
+              ['csv', 'json', 'xlsx', 'parquet'].includes(ext) ? 'data' :
+              'document';
+            const liveArtifact: Artifact = {
+              filename: fn,
+              domain: event.domain ?? '',
+              type: artifactType,
+              relevance: '',
+            };
             updateThread((t) => ({
               ...t,
+              liveArtifacts: t.liveArtifacts.some((a) => a.filename === fn)
+                ? t.liveArtifacts
+                : [...t.liveArtifacts, liveArtifact],
               steps: t.steps.map((s, i) => {
                 if (i !== stepIndex - 1) return s;
-                const label = event.domain ? `📄 ${event.filename} (/${event.domain}/)` : `📄 ${event.filename}`;
+                const label = event.domain ? `📄 ${fn} (/${event.domain}/)` : `📄 ${fn}`;
                 return { ...s, sub_items: [...s.sub_items, label] };
               }),
             }));
             break;
+          }
           case 'signal':
             updateThread((t) => ({
               ...t,
@@ -394,10 +428,24 @@ export default function App() {
           case 'complete':
             if (event.result) {
               const newResult = event.result!;
+              // Update refs synchronously so any concurrent analysis that completes
+              // in the same event-loop tick reads the already-accumulated values,
+              // rather than a stale snapshot from the previous React render cycle.
               const newResults = { ...analysisResultsRef.current, [rfId]: newResult };
-              const newTotal   = totalTokensRef.current + newResult.tokens_used;
-              const newUnc     = portfolioUncertainty(steps, newResults);
-              setTokenHistory((h) => [...h, { tokens: newTotal, uncertainty: newUnc }]);
+              analysisResultsRef.current = newResults;
+              const newTotal = totalTokensRef.current + newResult.tokens_used;
+              totalTokensRef.current = newTotal;
+              const { low: newLow, high: newHigh } = portfolioExposure(steps, newResults);
+              setTokenHistory((h) => [...h, {
+                tokens: newTotal,
+                low: newLow,
+                high: newHigh,
+                label: rf!.name,
+                sectionId,
+                depth: newResult.depth,
+                summary: newResult.summary,
+                gaps: newResult.gaps.slice(0, 3),
+              }]);
               updateThread((t) => ({
                 ...t,
                 steps: t.steps.map((s) => ({ ...s, status: 'complete' as const })),
@@ -430,12 +478,16 @@ export default function App() {
   const handleRunAll = useCallback(async () => {
     if (isRunningAll) return;
     setIsRunningAll(true);
-    const unanalyzed = steps
+    const allRfs = steps
       .flatMap((s) => s.risk_factors)
-      .filter((rf) => !analysisResults[rf.id] && !runningRfIds.has(rf.id));
-    for (const rf of unanalyzed) await handleAnalyse(rf.id);
+      .filter((rf) => !runningRfIds.has(rf.id));
+    // Cascade through depths 1→globalDepth so the chart shows full progression
+    const depths: Depth[] = globalDepth === 3 ? [1, 2, 3] : globalDepth === 2 ? [1, 2] : [1];
+    for (const d of depths) {
+      for (const rf of allRfs) await handleAnalyse(rf.id, undefined, d);
+    }
     setIsRunningAll(false);
-  }, [isRunningAll, steps, analysisResults, runningRfIds, handleAnalyse]);
+  }, [isRunningAll, steps, runningRfIds, handleAnalyse]);
 
   // ── Step / RF selection ────────────────────────────────────────────────────
 
@@ -548,6 +600,7 @@ export default function App() {
                 forecastCurve={forecastCurve}
                 threshold={riskThreshold}
                 onThresholdChange={setRiskThreshold}
+                onPointClick={(secId) => handleSectionFocus(secId, OIL_SECTION_LOCATIONS[secId] ?? null)}
               />
             </div>
             <div className="left-col__report">

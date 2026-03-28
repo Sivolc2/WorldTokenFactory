@@ -50,6 +50,15 @@ _CUSHING_DEM     = _a("artifacts/cushing_oklahoma_dem_30m.tif", "oil", "image",
                        "Copernicus 30m DEM — Cushing, OK; terrain around the 94M-barrel pipeline crossroads hub")
 _CSB_VIDEO       = _a("artifacts/csb_bp_texas_city_anatomy_of_disaster.mp4", "oil", "video",
                        "CSB root-cause analysis of BP Texas City refinery explosion — process safety and failure chain benchmark")
+_PERMIAN_YT      = _a("permian_power_grid_risk.url", "oil", "youtube",
+                       "Permian Basin Power Shortage: How Oil & Gas Operators Can Overcome Grid Constraints — 23 min expert discussion of ERCOT dependency and compressor failure risk",
+                       url="https://www.youtube.com/watch?v=rrktPzN06nA")
+_CSB_YT          = _a("csb_bp_texas_city_anatomy_of_disaster.url", "oil", "youtube",
+                       "CSB — Anatomy of a Disaster: BP Texas City Refinery Explosion 2005 — federal investigation animation of failure modes and consequence chain",
+                       url="https://www.youtube.com/watch?v=XuJtdQOU_Z4")
+_COLONIAL_YT     = _a("colonial_pipeline_incident_analysis.url", "oil", "youtube",
+                       "Colonial Pipeline incident analysis — pipeline operations disruption, SCADA vulnerability and consequence chain case study",
+                       url="https://www.youtube.com/watch?v=n4PtE1SQBAM")
 
 # ── per-factor canned data ────────────────────────────────────────────────────
 # Each entry: (summary, gaps, metrics, artifacts, tokens_used)
@@ -125,7 +134,7 @@ _DATA: dict[str, dict] = {
             ],
             "metrics": _m(0.25, 0.52, 60_000_000, 280_000_000,
                           "ERCOT grid analysis + DEM confirms full electrical dependency; duration modelled at 5-day curtailment scenario"),
-            "artifacts": [_PERMIAN_BRIEF, _PERMIAN_VIDEO, _PERMIAN_DEM],
+            "artifacts": [_PERMIAN_BRIEF, _PERMIAN_YT, _PERMIAN_DEM],
             "tokens": 2_140,
         },
     },
@@ -292,21 +301,20 @@ _DATA: dict[str, dict] = {
                 "2005–2024. Corrosion-related failures on similar HCA crossings: 7 reportable incidents, "
                 "average remediation cost $8.4M, average throughput disruption 19 days. "
                 "Thread B (regulatory): 6 open PHMSA conditions reviewed in detail. Two delinquent conditions "
-                "involve Segment A metal-loss anomalies exceeding 50% wall thickness — these are ASME B31.4 "
-                "Schedule A defects requiring immediate action. Enforcement gap creates concurrent civil penalty "
-                "exposure of $218K/day per violation. Thread C (geospatial/DEM): Segment B coastal crossing "
-                "analysed via the Cushing DEM and gulf subsidence data. Eastern offshore approach: 2.4–4.8 inches "
-                "of cumulative subsidence + 3 bell-hole corrosion clusters = stress concentration risk at 3 known "
-                "locations. Probabilistic failure model: 19% conditional probability of a reportable release "
-                "if throughput is increased 20% above current rates. Thread D (financial): Release scenario "
-                "modelled vs OPA liability schedule. 5th/95th percentile: $11M / $88M. "
+                "involve Segment A metal-loss anomalies exceeding 50% wall thickness — ASME B31.4 Schedule A "
+                "defects requiring immediate action. Enforcement gap creates $218K/day civil penalty exposure per violation. "
+                "Thread C (geospatial/DEM): Segment B coastal crossing analysed via subsidence data. Eastern offshore "
+                "approach: 2.4–4.8 inches cumulative subsidence + 3 bell-hole corrosion clusters = stress concentration "
+                "risk at 3 known locations. Probabilistic failure model: 19% conditional probability of a reportable "
+                "release if throughput is increased 20% above current rates. "
+                "Thread D (financial): Release scenario modelled vs OPA liability schedule. 5th/95th percentile: $11M / $88M. "
                 "Synthesis: immediate re-inspection of Segment B is the single highest-value risk reduction action."
             ),
             "gaps": [
                 "Segment B ILI reinspection not yet completed — coastal corrosion state remains uncharacterised",
                 "Post-2022 Brazoria County seismic cluster not incorporated into pipeline stress FEA model",
             ],
-            "metrics": _m(0.20, 0.20, 11_000_000, 88_000_000,
+            "metrics": _m(0.20, 0.20, 16_000_000, 58_000_000,
                           "PHMSA incident base rate + geospatial stress concentration; 5th–95th from OPA release scenario Monte Carlo"),
             "artifacts": [_PIPELINE_INT, _SUBSIDENCE, _PIPELINE_GIS, _COMPLIANCE],
             "tokens": 172_000,
@@ -354,7 +362,7 @@ _DATA: dict[str, dict] = {
             ],
             "metrics": _m(0.19, 0.44, 14_000_000, 72_000_000,
                           "ILI anomalies + subsidence quantified; corrosion×subsidence co-occurrence multiplier (2.3×) raises FR; Segment B gap retained as primary residual uncertainty"),
-            "artifacts": [_PIPELINE_INT, _SUBSIDENCE, _PIPELINE_GIS, _COMPLIANCE],
+            "artifacts": [_PIPELINE_INT, _SUBSIDENCE, _PIPELINE_GIS, _COMPLIANCE, _COLONIAL_YT],
             "tokens": 2_450,
         },
     },
@@ -363,22 +371,21 @@ _DATA: dict[str, dict] = {
         "name": "Cushing Storage Congestion",
         "d3": {
             "summary": (
-                "Thread A (historical): Cushing capacity events reviewed — April 2020 (WTI went negative at $−37/bbl) "
-                "is the extreme tail event; 2019 shoulder-season congestion is the more relevant analogue at 83% "
-                "utilisation: a $4.20/bbl basis discount persisted for 6 weeks, costing large operators $18–$35M. "
-                "Thread B (regulatory): EIA Petroleum Supply Monthly and weekly stocks reviewed. Current utilisation "
-                "confirmed at 57% (5-week average). Lease agreements at Cushing: weighted average remaining term "
-                "is 14 months — no immediate squeeze, but a ramp would hit spot-rate storage at 3× premium. "
-                "Thread C (geospatial/DEM): Cushing DEM confirms tank farm layout; 14 working storage tanks "
-                "with combined nameplate 94M bbl; 3 tanks under maintenance (approx 8M bbl temporarily offline). "
-                "Effective available capacity for incremental inflow: ~42M bbl above current stocks. "
-                "At 800 Kbbl/day incremental inflow, breach of 80% threshold in 21 days confirmed. "
-                "Thread D (financial modelling): Congestion cost modelled as basis discount × incremental volume "
-                "× duration. 5th/95th percentile: $19M / $105M."
+                "Thread A (historical): Cushing capacity events reviewed — April 2020 (WTI −$37/bbl) is the extreme "
+                "tail; 2019 shoulder-season congestion at 83% utilisation is the relevant analogue: $4.20/bbl basis "
+                "discount persisted 6 weeks, costing large operators $18–35M. "
+                "Thread B (regulatory): EIA Petroleum Supply Monthly reviewed. Current utilisation confirmed at 57% "
+                "(5-week average). Weighted average remaining lease term: 14 months — incremental inflow hits spot-rate "
+                "storage at 3× premium. Thread C (geospatial/DEM): Cushing DEM confirms tank farm layout; 14 working "
+                "storage tanks, 94M bbl nameplate; 3 tanks under maintenance (~8M bbl temporarily offline). "
+                "Effective capacity for incremental inflow: ~42M bbl above current stocks. "
+                "At 800 Kbbl/day incremental, 80% threshold breach in 21 days confirmed. "
+                "Thread D (financial): Congestion cost modelled as basis discount × volume × duration. "
+                "5th/95th percentile: $19M / $105M."
             ),
             "gaps": [
-                "3 tanks under maintenance: return-to-service dates not confirmed — effective capacity may be 8M bbl lower than modelled",
-                "Spot-rate storage premium at Cushing under congestion not in data store — lease premium modelled from 2019 analogue",
+                "3 tanks under maintenance: return-to-service dates unconfirmed — effective capacity may be 8M bbl lower",
+                "Spot-rate storage premium under congestion not in data store — modelled from 2019 analogue",
             ],
             "metrics": _m(0.46, 0.18, 19_000_000, 105_000_000,
                           "Cushing utilisation confirmed at 57%; 21-day breach timeline calculated; 5th–95th from basis discount Monte Carlo"),
@@ -440,26 +447,24 @@ _DATA: dict[str, dict] = {
         "name": "Hurricane Platform Exposure",
         "d3": {
             "summary": (
-                "Thread A (historical incidents): Full 2010–2023 storm incident database reviewed. "
-                "4 Cat 3+ direct hits; 12 Cat 1–2 near-misses requiring evacuation. Empirical annual loss rate: "
-                "$24.4M/year across the 17-platform fleet. GC-204 incurred the largest single loss ($78M, 2020). "
+                "Thread A (historical): Full 2010–2023 storm incident database reviewed. 4 Cat 3+ direct hits; "
+                "12 Cat 1–2 near-misses requiring evacuation. Empirical annual loss rate: $24.4M/year across the "
+                "17-platform fleet. GC-204 incurred the largest single loss ($78M, 2020). "
                 "Thread B (regulatory): BSEE SEMS audits reviewed for all 3 high-risk platforms. GC-204: 2 critical "
                 "findings (cathodic protection, escape route lighting); MC-311: 1 critical (mooring load monitoring). "
-                "BSEE has scheduled a follow-up inspection for Q2 2024 — outcome not yet in data store. "
                 "Thread C (geospatial): NOAA 2050 storm track projections applied to platform positions. "
-                "GC-204 lies within the projected 90th-percentile Cat 3+ track corridor for August–October. "
+                "GC-204 lies within the 90th-percentile Cat 3+ track corridor for August–October. "
                 "Magnolia Star FPSO: designed for 100-year return period now assessed at 62-year under 2050 projections. "
-                "Thread D (financial): Loss distribution modelled from empirical storm track × structural vulnerability "
-                "× insurance deductible structure. 5th/95th percentile: $22M / $140M. "
-                "Synthesis: immediate API RP 2MET compliance for GC-204 and Magnolia Star would reduce 95th percentile "
-                "tail by approximately $35M."
+                "Thread D (financial): Loss distribution from empirical storm track × structural vulnerability × "
+                "insurance deductible. 5th/95th percentile: $22M / $140M. "
+                "Synthesis: API RP 2MET compliance for GC-204 and Magnolia Star would reduce 95th percentile tail by ~$35M."
             ),
             "gaps": [
                 "BSEE Q2 2024 follow-up inspection outcome not yet in data store",
                 "MC-311 mooring system structural analysis under Cat 3+ loading not completed post-re-certification",
             ],
             "metrics": _m(0.31, 0.20, 22_000_000, 140_000_000,
-                          "Empirical 31% Cat 3+ rate; BSEE findings quantified; 2050 storm track projections applied; 5th–95th from structural vulnerability Monte Carlo"),
+                          "Empirical 31% Cat 3+ rate; BSEE findings quantified; 2050 storm projections applied; 5th–95th from structural vulnerability Monte Carlo"),
             "artifacts": [_HURRICANE, _CSB_VIDEO, _COMPLIANCE],
             "tokens": 168_000,
         },
@@ -506,7 +511,7 @@ _DATA: dict[str, dict] = {
             ],
             "metrics": _m(0.30, 0.46, 25_000_000, 145_000_000,
                           "13-year storm track record + deductible structure confirmed; FR anchored to empirical 31% Cat 3+ rate; tail narrowed by excluding pre-Katrina structural failures"),
-            "artifacts": [_HURRICANE, _CSB_VIDEO, _COMPLIANCE],
+            "artifacts": [_HURRICANE, _CSB_YT, _COMPLIANCE],
             "tokens": 2_180,
         },
     },
@@ -515,24 +520,23 @@ _DATA: dict[str, dict] = {
         "name": "Coastal Subsidence Risk",
         "d3": {
             "summary": (
-                "Thread A (historical incidents): PHMSA Gulf Coast subsidence-related pipeline incidents reviewed "
-                "2000–2024. 9 reportable incidents on similar coastal crossing infrastructure; average repair cost "
-                "$6.2M; 2 triggered OPA liability totalling $28M. Thread B (regulatory): USGS InSAR subsidence "
-                "mapping (2020–2023) cross-referenced with pipeline route. Eastern offshore approach: InSAR confirms "
-                "3.1mm/year subsidence rate — at the high end of the 2019 survey range, implying cumulative "
-                "movement closer to 4.8 inches than 2.4 inches since last survey. Post-2022 seismic cluster "
-                "(Brazoria County M2.4–3.6): USGS event database shows 14 events since Q3 2022; "
-                "nearest event to pipeline centreline: 0.7 miles. Thread C (geospatial/DEM): Cushing DEM "
-                "and subsidence report combined. Three pipe stress concentration points identified at subsidence "
-                "inflection zones — 2 of which coincide with the 2022 seismic cluster footprint. "
+                "Thread A (historical): PHMSA Gulf Coast subsidence-related pipeline incidents reviewed 2000–2024. "
+                "9 reportable incidents on similar coastal crossing infrastructure; average repair cost $6.2M; "
+                "2 triggered OPA liability totalling $28M. "
+                "Thread B (regulatory): USGS InSAR subsidence mapping (2020–2023) cross-referenced with pipeline route. "
+                "Eastern offshore approach: InSAR confirms 3.1mm/year — at the high end of the 2019 survey range, "
+                "implying ~4.8 inches cumulative movement since last survey. Post-2022 Brazoria County seismic cluster: "
+                "14 events since Q3 2022; nearest event to pipeline centreline: 0.7 miles. "
+                "Thread C (geospatial/DEM): Three pipe stress concentration points identified at subsidence inflection "
+                "zones — 2 coincide with the 2022 seismic cluster footprint. "
                 "Thread D (financial): P10/P90 from failure probability × OPA schedule. 5th/95th: $4.2M / $58M. "
                 "Synthesis: the eastern approach must be surveyed before any throughput increase is attempted."
             ),
             "gaps": [
-                "Eastern offshore approach ILI/survey not completed — the 4.8-inch subsidence estimate remains unvalidated",
+                "Eastern offshore approach ILI/survey not completed — 4.8-inch subsidence estimate unvalidated",
                 "Geomechanical coupling between seismic cluster and pipeline bend stress: no FEA model completed",
             ],
-            "metrics": _m(0.17, 0.22, 4_200_000, 58_000_000,
+            "metrics": _m(0.17, 0.22, 5_000_000, 44_000_000,
                           "InSAR confirms high-end subsidence estimate; seismic proximity quantified; 5th–95th from OPA release Monte Carlo"),
             "artifacts": [_SUBSIDENCE, _PIPELINE_INT, _CUSHING_DEM],
             "tokens": 139_000,
@@ -681,12 +685,10 @@ async def stream_oil_d3(rf_id: str):
         yield {"event": "file_found", "filename": art.filename, "domain": art.domain}
         await asyncio.sleep(0.04)
 
-    # Simulate parallel threads starting
     for thread in threads:
         yield {"event": "step", "text": thread}
         await asyncio.sleep(0.08)
 
-    # Simulate sub-thread signals
     for gap in d["gaps"]:
         yield {"event": "signal", "text": gap}
         await asyncio.sleep(0.10)
@@ -694,9 +696,7 @@ async def stream_oil_d3(rf_id: str):
     yield {"event": "step", "text": "Synthesis across threads"}
     await asyncio.sleep(0.20)
 
-    # Token progress updates to animate the chart
-    token_steps = [10_000, 30_000, 60_000, 100_000, d["tokens"]]
-    for t in token_steps:
+    for t in [10_000, 30_000, 60_000, 100_000, d["tokens"]]:
         yield {"event": "token_update", "tokens": t}
         await asyncio.sleep(0.15)
 
