@@ -247,8 +247,10 @@ async def augment_search(request: dict):
 # ── Serve frontend static files (built by Dockerfile multi-stage) ──────────
 STATIC_DIR = Path(__file__).parent.parent.parent / "static"
 if STATIC_DIR.exists() and (STATIC_DIR / "index.html").exists():
-    # Serve static assets (JS, CSS, images)
-    app.mount("/assets", StaticFiles(directory=str(STATIC_DIR / "assets")), name="static-assets")
+    # Serve static assets (JS, CSS, images) — only if assets dir exists
+    assets_dir = STATIC_DIR / "assets"
+    if assets_dir.exists():
+        app.mount("/assets", StaticFiles(directory=str(assets_dir)), name="static-assets")
 
     # Catch-all: serve index.html for any non-API route (SPA routing)
     @app.get("/{path:path}")
