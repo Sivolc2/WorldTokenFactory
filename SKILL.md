@@ -1,97 +1,201 @@
 ---
 name: world-token-factory
 description: >-
-  Geospatial risk assessment agent for any business. Decomposes businesses into
-  operational steps, identifies risk factors, and runs multi-depth AI analysis
-  using satellite data, weather APIs, regulatory documents, and financial models.
-  Returns structured risk tokens with failure rates, uncertainty scores, and
-  loss ranges backed by cited evidence.
-version: 1.0.0
-author: World Token Factory Team
-tags:
-  - risk-assessment
-  - geospatial
-  - multimodal
-  - agents
-  - business-intelligence
-tools:
-  - railtracks
-  - senso
-  - nexla
-  - unkey
-  - gemini
+  Call the World Token Factory API to run geospatial risk assessments on any business.
+  Decomposes businesses into operational steps, identifies risk factors, and runs
+  multi-depth AI analysis returning structured risk tokens with failure rates,
+  uncertainty scores, loss ranges, and cited evidence.
+version: 2.0.0
+license: MIT
 ---
 
-# World Token Factory — Agent Skill
+# World Token Factory — Risk Assessment Skill
 
-## What This Skill Does
+Use this skill to assess geospatial and operational risk for any business via the World Token Factory API.
 
-Treats any business as a **token factory** — consuming compute and attention to reduce uncertainty. Given a business description, it:
-
-1. **Decomposes** the business into 3-5 operational steps with specific risk factors
-2. **Analyses** each risk factor at three depth levels (quick scan → research brief → deep run)
-3. **Returns structured risk tokens** with:
-   - Failure rate (0-1, probability of bad outcome)
-   - Uncertainty (0-1, confidence in the failure rate)
-   - Loss range (USD, width indicates information quality)
-   - Evidence artifacts (documents, maps, data files)
-   - Knowledge gaps (what's unknown and what it would cost to find out)
-
-## API Endpoints
+## Base URL
 
 ```
-POST /api/decompose     — Decompose business into steps + risk factors
-POST /api/analyse       — Run risk analysis at depth 1/2/3
-POST /api/chat          — Conversational risk assessment
-GET  /api/railtracks/status  — Check Railtracks agent availability
-POST /api/railtracks/analyse — Run Railtracks fan-out analysis
-GET  /api/nexla/status  — Check Nexla data pipeline status
-GET  /api/sponsor-status — Check all sponsor tool integrations
+https://king-prawn-app-kbwtp.ondigitalocean.app
 ```
 
 ## Authentication
 
-API endpoints are gated by Unkey API keys. Pass `X-API-Key` header:
-```
-curl -X POST https://your-deploy.ondigitalocean.app/api/decompose \
-  -H "X-API-Key: your_unkey_key" \
-  -H "Content-Type: application/json" \
-  -d '{"description": "Gulf Coast oil pipeline operator"}'
-```
-
-## Agent Architecture (Railtracks)
+Pass an API key via `X-API-Key` header. Get a key from the World Token Factory dashboard.
 
 ```
-QueryDecomposer (Gemini Flash)
-       │
-       ├── search_risk_data      → Senso RAG knowledge base
-       ├── fetch_geospatial_context → Open-Meteo weather API
-       └── calculate_risk_metrics   → Validation + scoring
-       │
-       ▼
-  RiskSynthesizer (Gemini Pro) → Structured RiskToken output
+X-API-Key: your_key_here
 ```
 
-## Sponsor Tools Used
+## Endpoints
 
-| Tool | Role |
-|------|------|
-| Railtracks | Multi-agent orchestration |
-| Google Gemini | LLM inference (2.5 Flash + Pro) |
-| Senso | RAG knowledge base for risk/regulatory docs |
-| Nexla | Geospatial data pipeline |
-| DigitalOcean | Deployment (App Platform) |
-| Unkey | API key management + credit metering |
-| Augment Code | Development acceleration (MCP) |
-| assistant-ui | Chat interface components |
+### 1. Decompose a Business
 
-## Quick Start
+Break any business into operational steps and risk factors.
 
-```bash
-git clone https://github.com/Sivolc2/WorldTokenFactory
-cd WorldTokenFactory
-pnpm install
-pip install -r repo_src/backend/requirements.txt
-cp .env.defaults .env  # Add your API keys
-pnpm dev
 ```
+POST /api/decompose
+Content-Type: application/json
+
+{
+  "description": "Gulf Coast oil pipeline operator focused on Permian Basin extraction",
+  "max_steps": 5
+}
+```
+
+**Response**: NDJSON stream of steps, each with risk factors and initial metrics (failure_rate, uncertainty, loss_range).
+
+### 2. Analyse a Risk Factor
+
+Run AI analysis on a specific risk factor at three depth levels.
+
+```
+POST /api/analyse
+Content-Type: application/json
+
+{
+  "risk_factor_id": "rf_1_1",
+  "risk_factor_name": "ERCOT Grid Failure Risk",
+  "business_context": "Gulf Coast Oil Operator",
+  "step_context": "Permian Field Operations",
+  "depth": 2,
+  "data_domains": ["oil"]
+}
+```
+
+**Depth levels**:
+- `1` — Quick Scan: filename matching, ~350 tokens, instant
+- `2` — Research Brief: reads source docs + Senso RAG, ~3k tokens, 30-60 seconds
+- `3` — Deep Run: parallel agents, multimodal (GeoTIFF, PDF, video), ~200k tokens
+
+**Response**: NDJSON stream with events: `step`, `signal`, `file_found`, `token_update`, `complete`.
+
+### 3. Orchestrated Analysis (Full Pipeline)
+
+Fan out to all data sources in parallel, synthesize with model-routed LLM.
+
+```
+POST /api/orchestrate/analyse
+Content-Type: application/json
+
+{
+  "business_name": "Gulf Coast Oil Operator",
+  "step_name": "Permian Field Operations",
+  "risk_factor_name": "ERCOT Grid Failure Risk",
+  "risk_factor_description": "Power curtailment to field compressors during ERCOT stress events",
+  "domain": "oil",
+  "lat": 31.5,
+  "lng": -102.5,
+  "depth": 2
+}
+```
+
+**What it does**:
+- Queries Senso RAG knowledge base for regulatory context
+- Fetches live weather from Open-Meteo at the coordinates
+- Searches local multimodal artifact catalog (DEMs, satellite imagery, PDFs, video)
+- Checks Nexla data pipeline status
+- Routes to optimal model via the DO Gradient model router (39 models)
+- Synthesizes with reasoning chain + cited evidence sources
+
+**Response**: NDJSON stream with reasoning chain, evidence sources, risk metrics.
+
+### 4. Chat
+
+Conversational risk assessment interface.
+
+```
+POST /api/chat
+Content-Type: application/json
+
+{
+  "prompt": "What are the top 3 risks for a warehouse near the Mississippi River?",
+  "system_message": "You are a World Token Factory risk analyst.",
+  "max_tokens": 2048,
+  "temperature": 0.3
+}
+```
+
+### 5. Model Route Preview
+
+See which AI model would be selected for a given prompt.
+
+```
+POST /api/model-route
+Content-Type: application/json
+
+{
+  "prompt": "Assess seismic risk for Permian Basin pipeline infrastructure",
+  "system_message": "risk analysis"
+}
+```
+
+**Response**: `{ "task_type": "geospatial", "selected_model": "kimi-k2.5", "reason": "..." }`
+
+### 6. System Health
+
+```
+GET /api/health
+GET /api/sponsor-status
+GET /api/orchestrate/systems
+GET /api/models
+```
+
+## Risk Token Schema
+
+Every analysis produces a structured Risk Token:
+
+```json
+{
+  "risk_factor_id": "rf_1_1",
+  "summary": "Cited analysis with specific numbers...",
+  "gaps": ["Specific knowledge gap 1", "Gap 2"],
+  "metrics": {
+    "failure_rate": 0.22,
+    "uncertainty": 0.76,
+    "loss_range_low": 48000000,
+    "loss_range_high": 360000000,
+    "loss_range_note": "Wide range reflects ERCOT event duration uncertainty"
+  },
+  "artifacts": [
+    {"filename": "permian_basin_risk_brief.md", "type": "document", "relevance": "..."}
+  ],
+  "tokens_used": 3200,
+  "depth": 2
+}
+```
+
+**Key insight**: `failure_rate` and `uncertainty` are SEPARATE metrics. A 5% failure rate with 80% uncertainty is very different from 5% with 10% uncertainty. The width of the loss range is itself a signal about information quality.
+
+## Example: Assess Any Business
+
+```python
+import httpx
+
+API = "https://king-prawn-app-kbwtp.ondigitalocean.app"
+KEY = "your_unkey_api_key"
+
+# Step 1: Decompose
+r = httpx.post(f"{API}/api/decompose",
+    headers={"X-API-Key": KEY, "Content-Type": "application/json"},
+    json={"description": "Solar panel installation company in Florida"})
+
+# Step 2: Analyse each risk factor
+for step in r.json().get("steps", []):
+    for rf in step["risk_factors"]:
+        analysis = httpx.post(f"{API}/api/analyse",
+            headers={"X-API-Key": KEY, "Content-Type": "application/json"},
+            json={
+                "risk_factor_id": rf["id"],
+                "risk_factor_name": rf["name"],
+                "business_context": "Solar installer, Florida",
+                "step_context": step["name"],
+                "depth": 2,
+                "data_domains": ["general"]
+            })
+        print(f"{rf['name']}: {analysis.json()}")
+```
+
+## Powered By
+
+Railtracks (agent orchestration) · Senso (RAG knowledge base) · Nexla (data pipelines) · DigitalOcean (hosting + Gradient AI inference) · Unkey (API key management) · Augment (code context) · Google Gemini (LLM) · assistant-ui (chat interface)

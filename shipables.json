@@ -1,0 +1,22 @@
+{
+  "name": "world-token-factory",
+  "version": "2.0.0",
+  "description": "Call the World Token Factory API to run geospatial risk assessments on any business. Decomposes businesses into operational steps, identifies risk factors, runs multi-depth AI analysis, and returns structured risk tokens with failure rates, uncertainty scores, and loss ranges backed by cited evidence.",
+  "author": "World Token Factory Team",
+  "license": "MIT",
+  "repository": "https://github.com/Sivolc2/WorldTokenFactory",
+  "keywords": [
+    "risk-assessment",
+    "geospatial",
+    "multimodal",
+    "agents",
+    "business-intelligence",
+    "api-client"
+  ],
+  "compatibility": {
+    "agents": ["claude-code", "cursor", "codex", "gemini", "cline", "copilot"]
+  },
+  "mcp": {
+    "servers": []
+  }
+}

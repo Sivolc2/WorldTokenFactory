@@ -1,0 +1,5 @@
+# The skill is API-only — no source code or data needed
+# Only SKILL.md and shipables.json should be in the package
+*
+!SKILL.md
+!shipables.json
