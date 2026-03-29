@@ -27,15 +27,16 @@ const API_BASE =
 
 // ── Adapter ───────────────────────────────────────────────────────────────────
 
+// Keywords that trigger the full orchestrator pipeline instead of simple chat
+const ORCHESTRATOR_TRIGGERS = /\b(assess|analy[sz]e|risk|exposure|failure rate|uncertainty|loss range|permian|gulf|hurricane|earthquake|pipeline|seismic|flood|wildfire|ercot|subsidence)\b/i;
+
 const wtfAdapter: ChatModelAdapter = {
   async run({ messages, abortSignal }) {
-    // Build auth headers
     const headers: Record<string, string> = { 'Content-Type': 'application/json' };
     const storedKey =
       typeof localStorage !== 'undefined' ? localStorage.getItem('wtf_api_key') : null;
     if (storedKey) headers['X-API-Key'] = storedKey;
 
-    // Find the last user message
     const lastUser = [...messages].reverse().find(m => m.role === 'user');
     const promptText =
       lastUser?.content
@@ -43,6 +44,91 @@ const wtfAdapter: ChatModelAdapter = {
         .map(p => p.text)
         .join(' ') ?? '';
 
+    // Route to orchestrator for risk-related queries
+    if (ORCHESTRATOR_TRIGGERS.test(promptText)) {
+      try {
+        const orchRes = await fetch(`${API_BASE}/api/orchestrate/analyse`, {
+          method: 'POST',
+          headers,
+          signal: abortSignal,
+          body: JSON.stringify({
+            business_name: 'User Query',
+            step_name: 'Risk Assessment',
+            risk_factor_name: promptText.slice(0, 100),
+            risk_factor_description: promptText,
+            domain: /oil|pipeline|permian|gulf|ercot/i.test(promptText) ? 'oil' :
+                    /lemming|arctic|tundra/i.test(promptText) ? 'lemming' : 'general',
+            lat: /permian|texas/i.test(promptText) ? 31.5 :
+                 /gulf|hurricane/i.test(promptText) ? 28.17 : null,
+            lng: /permian|texas/i.test(promptText) ? -102.5 :
+                 /gulf|hurricane/i.test(promptText) ? -88.49 : null,
+            depth: 2,
+          }),
+        });
+
+        if (orchRes.ok && orchRes.body) {
+          // Parse NDJSON stream — collect all events into a rich response
+          const reader = orchRes.body.getReader();
+          const decoder = new TextDecoder();
+          let buffer = '';
+          const signals: string[] = [];
+          let summary = '';
+          let evidenceSources: string[] = [];
+          let reasoning: string[] = [];
+
+          while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            buffer += decoder.decode(value, { stream: true });
+            const lines = buffer.split('\n');
+            buffer = lines.pop() ?? '';
+            for (const line of lines) {
+              const trimmed = line.trim();
+              if (!trimmed) continue;
+              try {
+                const evt = JSON.parse(trimmed);
+                if (evt.event === 'signal' && evt.text) signals.push(evt.text);
+                if (evt.event === 'step' && evt.text) signals.push(`▶ ${evt.text}`);
+                if (evt.event === 'file_found') signals.push(`📄 ${evt.filename}`);
+                if (evt.event === 'complete' && evt.result) {
+                  summary = evt.result.summary || '';
+                  if (evt.orchestrator_meta?.evidence_sources) {
+                    evidenceSources = evt.orchestrator_meta.evidence_sources.map(
+                      (s: any) => `[${s.type}] ${s.name}: ${s.contribution}`
+                    );
+                  }
+                  if (evt.orchestrator_meta?.reasoning_chain) {
+                    reasoning = evt.orchestrator_meta.reasoning_chain.map(
+                      (r: any) => `${r.action} → ${r.finding} (source: ${r.source})`
+                    );
+                  }
+                }
+              } catch { /* skip malformed */ }
+            }
+          }
+
+          // Build rich response with orchestrator data
+          let response = '';
+          if (summary) response += `## Risk Assessment\n\n${summary}\n\n`;
+          if (reasoning.length > 0) {
+            response += `### Reasoning Chain\n${reasoning.map((r, i) => `${i + 1}. ${r}`).join('\n')}\n\n`;
+          }
+          if (evidenceSources.length > 0) {
+            response += `### Evidence Sources\n${evidenceSources.map(e => `- ${e}`).join('\n')}\n\n`;
+          }
+          if (signals.length > 0) {
+            response += `### Agent Activity\n${signals.slice(-10).map(s => `- ${s}`).join('\n')}`;
+          }
+          if (!response) response = 'Orchestrator returned no results. Try a more specific query.';
+
+          return { content: [{ type: 'text' as const, text: response }] };
+        }
+      } catch (e) {
+        // Fall through to simple chat on orchestrator failure
+      }
+    }
+
+    // Simple chat fallback
     const res = await fetch(`${API_BASE}/api/chat`, {
       method: 'POST',
       headers,
@@ -50,7 +136,7 @@ const wtfAdapter: ChatModelAdapter = {
       body: JSON.stringify({
         prompt: promptText,
         system_message:
-          "You are a World Token Factory risk analyst. Help users understand business risks by decomposing their business into risk factors. Be specific with numbers and evidence. If asked about a specific business, describe 3-5 key operational steps and their risk factors.",
+          "You are a World Token Factory risk analyst. You have access to multimodal geospatial data including USGS earthquakes, NASA natural events, NOAA weather alerts, FEMA disaster history, Senso regulatory knowledge base, and satellite imagery. Help users understand business risks with specific numbers and evidence.",
         max_tokens: 2048,
         temperature: 0.3,
       }),
@@ -65,10 +151,7 @@ const wtfAdapter: ChatModelAdapter = {
 
     const data = await res.json();
     const text: string = data.response ?? data.message ?? JSON.stringify(data);
-
-    return {
-      content: [{ type: 'text', text }],
-    };
+    return { content: [{ type: 'text', text }] };
   },
 };
 
