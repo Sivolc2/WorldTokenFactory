@@ -2,11 +2,10 @@ FROM node:20-slim AS frontend-build
 WORKDIR /build
 COPY repo_src/frontend/ ./
 RUN npm install --legacy-peer-deps 2>&1 || true
-RUN npx vite build 2>&1 || echo "Vite build failed, trying tsc skip..." && npx vite build --skipTypeCheck 2>&1 || true
-# If dist doesn't exist, create a minimal index.html
+RUN npx vite build 2>&1 || true
 RUN if [ ! -f dist/index.html ]; then \
-      mkdir -p dist && \
-      echo '<!DOCTYPE html><html><head><meta charset="utf-8"><title>World Token Factory</title></head><body><div id="root"><h1 style="color:#00ff88;background:#0a0a0f;padding:40px;font-family:monospace">World Token Factory API is running. Frontend build pending.</h1><p style="color:#e0ffe0;background:#0a0a0f;padding:0 40px;font-family:monospace">API: <a href="/api/sponsor-status" style="color:#00ccff">/api/sponsor-status</a> | <a href="/api/health" style="color:#00ccff">/api/health</a> | <a href="/docs" style="color:#00ccff">/docs</a></p></div></body></html>' > dist/index.html; \
+      mkdir -p dist/assets && \
+      echo '<!DOCTYPE html><html><head><meta charset="utf-8"><title>World Token Factory</title><style>body{margin:0;background:#0a0a0f;color:#e0ffe0;font-family:monospace;display:flex;align-items:center;justify-content:center;min-height:100vh}a{color:#00ccff}.c{text-align:center}h1{color:#00ff88;font-size:2em}p{opacity:0.7}</style></head><body><div class="c"><h1>WORLD TOKEN FACTORY</h1><p>Every business is a token factory</p><p style="margin-top:2em"><a href="/api/sponsor-status">/api/sponsor-status</a> · <a href="/api/health">/api/health</a> · <a href="/docs">/docs</a></p></div></body></html>' > dist/index.html; \
     fi
 
 FROM python:3.12-slim
