@@ -86,8 +86,12 @@ app.include_router(autoresearch_router)
 
 @app.get("/")
 async def read_root():
-    """A simple root endpoint to confirm the API is running."""
-    return {"message": "Welcome to the Backend API. Database is initialized."}
+    """Serve frontend if available, otherwise API welcome message."""
+    static_dir = Path(__file__).parent.parent.parent / "static"
+    index = static_dir / "index.html"
+    if index.exists():
+        return FileResponse(str(index))
+    return {"message": "Welcome to World Token Factory API. Frontend at /docs"}
 
 @app.get("/api/hello")
 async def read_hello():
